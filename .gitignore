@@ -1,0 +1,8 @@
+# Files
+*.gz
+npm-debug.log
+
+# Folders
+/build/
+/dist/
+/node_modules/
