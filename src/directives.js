@@ -1,263 +1,231 @@
 (function(global) {
     "use strict"
     global.Pow.directive(
-        '',
-        bind,
-        Break,
-        breakIf,
-        call,
         fragment,
         func,
         If,
-        js,
-        repeate,
-        textContent,
-        valueTo,
-        Var
+        on,
+        repeat,
+        run,
+        forgo,
+        Var,
+        xjson
     )
 
-    function func(chainname, params, code) {
+    function func(funcName, params, code) {
         /**
-            func 指令定义一个可被调用的函数, 工作于 "tag" 期, 缺省为匿名函数.
-            通过 config 参数给函数命名(存储路径)可以保存函数.
+            func 定义一个函数.
             格式:
-                ow-func[-chainname]="[,]params1[,paramsN][ code]"
-            如果以 "," 开头表示在现有参数后增加新参数, 否则只传递定义的参数.
+                func[-funcName]="[,][p1[,p2[,pn]]] body"
+            这对应原生 Function(p1, p2, … , pn, body).
             用例:
-                ow-func=""
-                ow-func="paramsOnly"
-                ow-func=" codeOnly()"
-                ow-func=",x,y x=initX();y=initY()"
-                ow-func-my-nodes="params code()"
-            chainname 是执行函数的命名, 事实上是由整个节点和后代组成.
-            细节:
-                参数可由外部传入, 或者定义者内部进行赋值.
+                func=""
+                func="newParams"
+                func=" code()" // 无参数要保留前导空格
+                func=",x,y x=x||1;y=y||2"
+                func-my-nodes="newParams code()"
+
+            参数名以 "," 开头表示在现有参数后增加新参数. 所有参数向下传递.
          */
         var results = code.split(' ')[0]
         code = code.slice(results.length + 1)
 
-        params += ',' + results
-
         if (results[0] == ',') {
-            results = params
-        }
-        // chain 需要在运行期保存
-        return this.func(params, code,
-            results || null, chainname ? 'tag chain' : 'tag', chainname)
-    }
-
-    function nameTrim(v) {
-        return v.trim()
-    }
-
-    function nameIfy(v, i, array) {
-        return v && array.indexOf(v) == i
-    }
-
-    function call(chainname, params, code) {
-        /**
-            call 指令调用 func 指令命名的函数(Pipe).
-            格式:
-               ow-child-chainname="[,]params1[,paramsN][ code]"
-            提取 chainname 对应的 Pipe 对象 __pipe__, 执行 code,然后调用:
-                __pipe__.set(this.receiver).invoke(args)
-            这里的 args 是 paramsN 与 params 合并(如果首字符为",")的结果.
-         */
-        var args = code.split(' ')[0]
-        code = code.slice(args.length)
-
-        params += ',' + args
-
-        if (args[0] == ',') {
-            args = params
+            params = results = [params, results]
+        } else {
+            params = results
         }
 
-        args = ('__,' + args).split(',').map(nameTrim).filter(nameIfy).join(',')
-
-        code = 'var __pipe__=this.Pow.getChain("' + chainname + '");\n' + code + ';\n' +
-        '__pipe__.set(this.receiver).invoke([' + args + '])'
-
-        return this.func(params, code)
+        // 需要在运行期保存
+        return this.func(params, code, results || null, funcName)
     }
 
-    function Var(cfg, params, code) {
+    function Var(names, params, code) {
         /**
-            var 指令格式与 func 指令格式一致, 只是不产生可被调用的函数.
+            var 定义向后传递的参数.
+            格式:
+                var-v1[-vN]="initCode"
+            语义:
+                var v1,vN; initCode;
+            示例:
+                var-a="a=init()"   // 抛弃以前的参数, 返回参数只有 'a'
+                var--a="a=init()"  // 保留以前的参数, 返回参数加入 'a'
+                var-a="init()"     // 只有一个变量时, 补全 initCode "a=init()"
+                var--a="init()"    // 补全 initCode "a=init()"
          */
-        var results = code.split(' ')[0]
-        code = code.slice(results.length + 1)
-
-        params += ',' + results
-
-        if (results[0] == ',') {
-            results = params
+        names = names.split('-')
+        if (!names[0] && names.length == 2 || names.length == 1) {
+            code = (name[0] || names[1]) + '=' + code
         }
 
-        return this.func(params, code, results || null, 'tag')
+        return func.call(this, '', params, names.join(',') + ' ' + code)
     }
 
-    function js(cfg, params, code) {
+    function run(_, params, code) {
         /**
-            js 嵌入 javascript 代码.
-            例如在 code 中对 var 指令定义的变量赋值.
-         */
-        return this.func(params, code)
-    }
-
-    function If(cfg, params, code) {
-        /**
-            if 指令当 code 表达式为真时所在节点和后代节点才能继续.
-            不影响同级节点.
-         */
-        return this.func(params, 'if (!(' + code + ')) return')
-    }
-
-    function Break(cfg, params, code) {
-        /**
-            break 跳过后续同级节点, 后代节点不影响.
-         */
-        return this.func(params, code + ';return this.Pow.BREAK', this.BREAK)
-    }
-
-    function breakIf(cfg, params, code) {
-        /**
-            breakIf 指令当 code 表达式为真时跳过后续同级节点.
-            不影响后代节点.
+            执行 javascript 代码.
             格式:
-                "express"
+                run="code"
+            语义:
+                code
          */
-        return this.func(params, 'if (!(' + code + ')) return this.Pow.BREAK')
+        return this.func('', params, code)
     }
 
-    function repeate(cfg, params, code) {
+    function If(obj, params, express) {
         /**
-            repeate 枚举某对象属性, 重复所在节点和后代节点.
+            条件语句. 当表达式成立时, 执行同节点后续指令, 否则忽略同节点后续指令.
             格式:
-                "express[ varOfvalue[ varOfkey]]"
+                if="express"
+                if-obj="code"
+            语义:
+                if (!express) return;
+                if (!obj) return;
+                code
+
+            第一种格式:
+                
+            第二种格式:
+                当后缀表示的变量对象为真时, 执行 code. 缺省 code 为 forgo("this").
+         */
+
+        return obj ?
+            this.func(params, 'if (!(' + obj + ')) return;\n' + code) :
+            this.func(params, 'if (!(' + express + ')) return;')
+    }
+
+    function forgo(range, params, express) {
+        /**
+            丢弃指定范围的节点:
+            格式:
+                forgo-someThings="express"
+            语义:
+                if(express)
+                    forgo(someThings)
+
+            缺省 express 为 'true'
             用例:
-                "express"       等价 "express val key"
-                "express val"   不会传递 key
-                "express ! key" 不会传递 val
-            val, key 参量被加入到后代节点.
+                forgo                 // 立即丢弃当前节点及子孙节点
+                forgo-this            // 立即丢弃当前节点及子孙节点
+                forgo-childNodes      // 标记丢弃子孙节点
+                forgo-nextSiblings    // 标记丢弃后续兄弟节点
+                forgo-others          // 标记保留当前节点及子孙节点, 丢弃其它后续节点
+                forgo="express"       // 当 express 成立时立即丢弃当前节点及子孙节点,
+
+            范围 this, childNodes, nextSiblings, others 可以组合且顺序无关.
+            忽略不能识别的范围后缀, 您也许喜欢下面更具可读性的写法.
+                forgo-childNodes-if="express"
          */
-        var results,
-            names = ''
 
-        code = (code).split(' ').slice(3)
+        range = range || 'this'
 
-        if (code.length == 1) {
-            code.push('val')
-            code.push('key')
+        range = this.parameters(range.split('-')).join(',')
+
+        return this.func(params,
+            'if (' + (express || 'true') + ')' + 'return "' + range + '";'
+        )
+    }
+
+    function repeat(x, params, code) {
+        /**
+            遍历对象, 重复执行当前节点.
+            格式:
+                repeat-x-[val[-key]]="code"
+            语义:
+                forEach(x, function([val],[key]){
+                    code
+                })
+            用例:
+                repeat-x            // 等价
+                repeat-x-val-key    // function(val, key)
+                repeat-x--key       // function(key)
+                repeat-x-val-       // function(val)
+                repeat-x--          // function()
+                repeat--x           // 保持传递原参数
+            x 在执行期必定是个可访问对象.
+            val 和 key 会向后传递, 如果不抛弃的话.
+         */
+        var results, names = x.split('-'),
+            keep
+
+        if (names[0] == '') {
+            keep = true
+            names = names.slice(1)
         }
 
-        if (code[1] && code[1] !== '!') {
-            names = code[1]
-        }
+        if (!names.length)
+            throw Error('repeat: invalid suffix: ' + x)
 
-        if (code[2]) {
-            names += (names ? ',' : '') + code[2]
-        }
+        x = names[0]
+        names = names.slice(1)
 
-        // 去重
-        results = (params + ',' + names).split(',')
-            .map(nameTrim).filter(nameIfy).join(',')
+        results = keep && [params] || []
 
-        code = 'var __c__=this.cursor;' +
-        'this.Pow.any(' + code[0] + ',function(' + names + ') {' +
-        'this.cursor=__c__;this.result=[__,' + results + ']},this);return'
+        keep = this.parameters(names).join(',') || 'val,key'
+
+        results.push(keep)
+
+        results = this.parameters(results)
+
+        code = 'var __ship=this.ownership();\n' +
+            'this.Pow.any(' + x + ', function(' + keep + ') {\n' +
+            code + ';\n' +
+            '__ship(' + results.join(',') + ')\n}, null, ' +
+            (!names[0] && names.length == 2) + ')\nreturn "this"'
 
         return this.func(params, code, results)
     }
 
-    function valueTo(cfg, params, code) {
+    function fragment(_, params) {
         /**
-            当元素 value 属性发生改变, 对指定对象属性进行赋值.
-            工作期:
-                node
-            三种格式:
-                "object.propName"
-                "object 'propName'"
-                "object"
-            第二种格式 'propName'事实上是属性名求值表达式.
-            第三种格式提取 Pow(__).attr('name') 为属性名
+            fragment 为标签指令, 表示该节点是透明的, 子孙被上提. 示例:
+
+                <fragment something>Hi <b>Girl</b></fragment>
+
+            子孙 "Hi <b>Girl</b>" 被上提, 而 fragment 本身是透明的.
+         */
+        return this.func(params, 'this.attrs.nodeName="#document-fragment";')
+    }
+
+    function xjson(_, params, varName) {
+        /**
+            提供模板支持 xjson, 保存转换后的 js 对象到 Pow.Pool.
+            该指令总是丢弃当前节点.
+            格式:
+                xjson="varName"
+            语义:
+                Pow.Pool.put('varName', Pow.xjson(this.node));
+                forgo("this")
             提示:
-                value 指令和 bind 指令配合使用, 可实现表单元素数据绑定.
+                通常可以找到比在模板中使用 xjson 更好的方法.
          */
 
-        var object = code.split(' ', 1)[0]
+        varName = 'this.Pow.Pool.put(' + varName + ',this.Pow.xjson(this.node));' +
+            ';return "this"'
 
-        if (!object) {
-            return Error('invalided code value=' + JSON.stringify(code))
-        }
-
-        cfg = code.slice(object.length + 1) // propName
-
-        if (!cfg) {
-            if (object.indexOf('.') === -1) {
-                cfg = 'var __pow__=this.Pow;'
-                code = object + '[__pow__(this).attr("name")]=this.value'
-            } else {
-                code = object + '=this.value'
-            }
-        } else {
-            // __k__ 保证表达式只被计算一次
-            cfg = 'var __k__=' + cfg + ';'
-            code = object + '[__k__]=this.value'
-        }
-
-        return this.func(params,
-            cfg + 'this.Pow(__).on("change",function(){' + code + '})',
-            null,
-            'node'
-        )
+        return this.func([], varName)
     }
 
-    function bind(cfg, params, code) {
+
+    function on(typeName, params, code) {
         /**
-            当对象属性被赋值时, 发出 "owTextChanged" 事件.
-            工作期:
-                node
-            两种格式:
-                "object.propName"
-                "object 'propName'"
-            第二种格式 'propName'事实上是属性名求值表达式.
+            绑定当前节点事件.
+            格式:
+                on-eventType="code"
+                on-eventType-eventName="code"
+            对应代码:
+                Pow(this.node).on("type", function(eName){
+                    code
+                })
+            缺省 eventType 为 click, eventName 为 event
+            on="code" 等价 on-click-event="code"
          */
-        var object = code.split(' ', 1)[0]
+        typeName = typeName.split('-')
 
-        cfg = code.slice(object.length + 1) // propName
+        code = 'this.Pow(this.node).on("' + (typeName[0] || 'click') +
+            '",function(' + typeName[1] || 'event' + '){' + code + '})'
 
-        if (!cfg) {
-            object = object.split('.')
-            cfg = "'" + object.pop() + "'"
-            object = object.join('.')
-        }
-
-        if (!object || !cfg) {
-            return Error('invalided code bind=' + JSON.stringify(code))
-        }
-
-        // watch 无法判断重复加入的匿名函数, 有可能出问题么???
-        // __k__ 保证表达式只被计算一次
-        return this.func(params,
-            'var __pow__=this.Pow,__k__=' + cfg +
-            ';__pow__.watch(' + object + ',__k__, {' +
-            'enumerable:true,skipGetter:true,' +
-            'set:function(){' +
-            '__pow__(__).fire("owTextChanged",[' + params + '])}})',
-            null,
-            'node'
-        )
-    }
-
-    function textContent(cfg, params, text) {
-        /**
-            textContent 调用 Pow.express('textContent', params, text)
-        */
-        return this.express('textContent', params, text)
-    }
-
-    function fragment(cfg, params, code) {
-        return this.func(params, '__.nodeName=null;' + code)
+        return this.func(params, code)
     }
 
 })(this)

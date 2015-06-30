@@ -3,13 +3,18 @@
     global.Pow.PowJS = PowJS
     PowJS.prototype = global.Pow.prototype
 
+    // 源代码中内部方法在前, PowJS 对象方法在后, 保持 PowJS 对象方法名排序
+
     global.Pow.extend(
         PowJS.prototype, {
             all: querySelectorAll // alias
         },
         add,
         attr,
+        eq,
+        get,
         first,
+        html,
         last,
         querySelector,
         querySelectorAll,
@@ -37,7 +42,7 @@
 
     function PowJS(selectors, context) {
         /**
-            这是 Pow 的执行体, 返回匹配的元素数组, 称作 Pow 对象, 提供集合操作.
+            这是 Pow 的执行体, 返回称作 PowJS 对象的数组, 提供集合操作.
             参数:
                 ()
                     返回空集合.
@@ -53,21 +58,20 @@
                     返回只有一个元素的集合.
                 (HTML)
                     返回 HTML 源码生成的子节点(childNodes)集合.
-            返回:
-                Pow 对象
-            Pow 外观与 Zepto/jQuery 很像, 事实上不兼容.
-            Pow 是一个 Array, 保留原生方法并采用原生 API 风格.
+
+            PowJS 对象使用 Chaining 调用风格, 这与 Zepto/jQuery 风格很像.
+            PowJS 对象方法是为满足其自身的需求设计的, 具体方法不完全兼容 Zepto/jQuery.
             典型差异:
+                PowJS 对象是一个 Array, 保留 Array 原生方法.
                 Array.prototype.forEach ( callback [ , thisArg ] )
-                thisArg 缺省时, callback 中 this 为 window.
-            callback 风格为:
-                function forEachCallback(item,index[,list])
-            Zepto/jQuery 回调函数风格为:
-                function eachCallback(index[,item])
-                callback 中 this 为 item
-            注意:
-                Pow.slice()
-                返回值是 Array 对象, 而不是 Pow.
+                thisArg 缺省时, callback 中 this 为全局变量, 通常是 window.
+                PowJS callback 采用原生 forEach 风格:
+                    function forEachCallback(item, index [,list])
+                Zepto/jQuery callback 采用 each 风格:
+                    function eachCallback(index [,item])
+            个别差异:
+                .html()  返回所有 Node 元素 outerHTML/textContent 的字符串拼接
+                .slice() 返回 Array 对象, 而不是 PowJS 对象.
          */
         var inst
         if (selectors instanceof PowJS)
@@ -83,50 +87,27 @@
         return inst.add(selectors, context)
     }
 
-    function first(selectors) {
-        /**
-            返回一个 Pow 对象, 最多只有一个元素, 是首个匹配的元素.
-                ()       Pow(this[0])
-                (String) this.querySelector(selectors)
-         */
-        if (selectors)
-            return this.querySelector(selectors)
-        return PowJS(this[0])
-    }
-
-    function last() {
-        return PowJS(this[this.length - 1])
-    }
-
-    function querySelectorAll(selectors) {
-        /**
-            别名 all. 返回当前集合后代与选择器匹配的元素集合.
-            selectors 必须为 CSS 选择器字符串.
-         */
-        var po = PowJS()
-        this.forEach(function(el) {
-            if (!el || !el.querySelectorAll) return
-            po.add(el.querySelectorAll(selectors))
+    // ----- 内部方法
+    function getAttrs(el, keys) {
+        var attrs = Object.create(null)
+        keys && keys.forEach(function(name) {
+            var v = el.getAttribute(name)
+            if (v !== undefined)
+                attrs[name] = v
         })
-        return po
+        if (keys) {
+            return attrs
+        }
+
+        for (var i = 0; i < el.attributes.length; i++) {
+            var attr = el.attributes.item(i)
+            attrs[attr.name] = attr.value
+        }
+
+        return attrs
     }
 
-    function querySelector(selectors) {
-        /**
-            返回一个 Pow 对象, 最多只有一个元素, 是当前集合首个匹配选择器的后代元素.
-            selectors 必须为 CSS 选择器字符串.
-         */
-        var po = PowJS()
-        this.some(function(el) {
-            if (!el || !el.querySelector) return
-            el = el.querySelector(selectors)
-            if (el) {
-                po.push(el)
-                return true
-            }
-        })
-        return po
-    }
+    // ----- PowJS 对象方法
 
     function add(selectors, context) {
         /**
@@ -138,35 +119,34 @@
                     添加 context.querySelectorAll(selectors) 的元素到集合.
                     selectors 为原生 CSS 选择器表达式字符串.
                     context 指定选择器查找元素所在的上下文, 缺省为 document.
-                (DOM node)
+                (Node)
                     添加 DOM node 元素到集合.
-                (Arraylike)
-                    添加所有 Arraylike 元素到集合.
+                (Array)
+                    添加所有 Array 元素到集合.
                 (Object)
-                    添加一个元素到集合.
+                    添加一个 Object 到集合.
                 (HTML)
                     添加 HTML 源码生成的子节点(childNodes)到集合.
             返回:
                 this Pow 对象
          */
-
+        var pow = this.Pow
         if (selectors == undefined) return this
 
         // Node 直接保存
-        if (selectors instanceof Node) {
-            this.push(selectors)
-            return this
-        }
+        if (pow.isNode(selectors)) {
+            this.indexOf(selectors) === -1 && this.push(selectors)
 
-        if ('string' === typeof selectors) {
-            if (selectors[0] !== '<') {
-                if (context) {
-                    selectors = PowJS(context).querySelectorAll(selectors)
-                } else {
-                    selectors = this.Pow.document.querySelectorAll(selectors)
-                }
+        } else if ('string' === typeof selectors) {
+
+            if (selectors.indexOf('<') != -1 && selectors.indexOf('<') < selectors.indexOf('>')) {
+                selectors = pow.fragment(selectors).childNodes
             } else {
-                selectors = this.Pow.fragment(selectors).childNodes
+                if (context) {
+                    selectors = pow(context).querySelectorAll(selectors)
+                } else {
+                    selectors = pow.document.querySelectorAll(selectors)
+                }
             }
 
             for (var i = 0; i < selectors.length; i++) {
@@ -175,13 +155,82 @@
                     this.push(context)
                 }
             }
-        } else {
-            this.Pow.toArray(selectors).forEach(function(el) {
-                if (el != undefined && this.indexOf(el) === -1) {
-                    this.push(el)
+
+        } else if (pow.isNodeList(selectors)) {
+
+            for (var i = 0; i < selectors.length; i++) {
+                this.indexOf(selectors[i]) === -1 && this.push(selectors[i])
+            }
+
+        } else if (pow.isArray(selectors)) {
+
+            selectors.forEach(function(el) {
+                if (el != null && this.indexOf(el) === -1) {
+                    this.indexOf(el) == -1 && this.push(el)
                 }
             }, this)
+
+        } else {
+            this.indexOf(selectors) === -1 && this.push(selectors)
         }
+        return this
+    }
+
+    function attr(name, value) {
+        /**
+            对元素属性进行 get/set/remove 操作, 不同参数组合有不同的行为:
+            返回第一元素属性值:
+                ()               返回全部属性组成的对象
+                (String)         返回一个属性值
+                ([String])       返回多个属性组成的对象.
+            设置所有元素属性值并返回 this:
+                (Object)         以 Object 的 key/value 设置多个属性值.
+                (String, value)  设置一个属性值为 value
+            删除所有元素属性并返回 this:
+                (String, null)   删除一个属性
+                ([String], null) 删除多个属性
+        */
+        var pow = this.Pow,
+            node
+
+        switch (arguments.length) {
+            case 0:
+                node = this[0]
+                return pow.isElement(node) && getAttrs(node) || Object.create(null)
+            case 1:
+                if (typeof name == 'string') {
+                    node = this[0]
+                    x = pow.parameters(name)
+                    if (x.length == 1) {
+                        return pow.isElement(node) && getAttrs(node, x)[name]
+                    }
+                    return pow.isElement(node) && getAttrs(node) || Object.create(null)
+
+                } else if (pow.isArray(name)) {
+
+                    return pow.isElement(node) && getAttrs(node) || Object.create(null)
+                }
+                value = name
+                break
+            default:
+                if (value === null) {
+                    return this.removeAttr(name)
+                }
+
+                if (typeof name != 'string') {
+                    return this
+                }
+                value = pow.object(name, [value])
+                break
+        }
+
+        // Object
+        name = Object.keys(value)
+        this.forEach(function(node) {
+            pow.isElement(node) && name.forEach(function(k) {
+                k != 'nodeName' && node.setAttribute(k, value[k])
+            })
+        })
         return this
     }
 
@@ -197,62 +246,112 @@
         }
     }
 
-    function attr(name, value) {
+    function eq(index) {
         /**
-            对元素属性进行 get/set/remove 操作, 不同参数组合有不同的行为:
-            返回第一元素属性值:
-                ()               返回全部属性副本
-                (String)         返回一个属性值
-                ([String])       返回多个属性副本组成的对象.
-            设置所有元素属性值并返回 this:
-                (Object)         以 Object 的 key/value 设置多个属性值.
-                (String, value)  设置一个属性值为 value
-            删除所有元素属性并返回 this:
-                (String, null)   删除一个属性
-                ([String], null) 删除多个属性
-        */
-        var isNode, keys, pow = this.Pow
-        if (value === null) {
-            return this.removeAttr(name)
-        }
-        // set
-        if (arguments.length === 2 && pow.isString(name)) {
-            name = pow.object(name, value)
-        }
+            返回 PowJS(this[index])
+         */
+        return this.Pow(this[index])
+    }
 
-        // PlainObject set
-        if (pow.isObject(name)) {
-            keys = Object.keys(name)
-            this.forEach(function(el) {
-                if (!pow.isNode(el)) keys.forEach(function(k) {
-                    el[k] = name[k]
-                })
-                else if (el.setAttribute) keys.forEach(function(k) {
-                    // form 元素, #text, #comment 需要特殊处理???
-                    el.setAttribute(k, String(name[k]))
-                })
-            })
-            return this
-        }
+    function get(index) {
+        /**
+            返回序号为 index 的元素
+         */
+        return this[index]
+    }
 
-        // get
-        if (!this.length) return
+    function first(selectors) {
+        /**
+            返回一个 Pow 对象, 最多只有一个元素, 是首个匹配的元素.
+                ()       Pow(this[0])
+                (String) this.querySelector(selectors)
+         */
+        if (selectors)
+            return this.querySelector(selectors)
+        return this.Pow(this[0])
+    }
 
-        if (pow.isString(name)) {
-            return !pow.isNode(this[0]) ? this[0][name] :
-                this[0].getAttribute && this[0].getAttribute(name)
-        }
+    function html(inner) {
+        /**
+            当参数 inner == null 时返回 Node 元素的 outerHTML/textContent 拼接字符串.
+            否则设置所有 Node 元素 innerHTML/textContent 为 inner.
+         */
 
-        pow.ift(!pow.isArray(name), 0, name)
+        var pow = this.Pow,
+            out = inner == null,
+            outer = out ? '' : null,
+            voids = this.Pow.Config.voidElements,
+            x
 
-        value = Object.create(null)
+        this.forEach(function(el) {
+            if (!pow.isNode(el)) return
 
-        name.forEach(function(name) {
-            value[name] = !pow.isNode(this) ? this[name] :
-                this.getAttribute && this.getAttribute(name)
-        }, this[0])
+            switch (el.nodeType) {
+                case 3: // TEXT_NODE
+                    if (out) {
+                        outer += el.textContent
+                    } else {
+                        el.textContent = inner
+                    }
+                    return
+                case 11: // DOCUMENT_FRAGMENT_NODE
+                    if (out)
+                        outer += pow(el.childNodes).html()
+                    return
+                case 1: // ELEEMENT_NODE
+                    x = el.nodeName.toLowerCase()
+                    if (!out) {
+                        if (voids.indexOf(x) == -1)
+                            el.innerHTML = inner
+                        return
+                    }
 
-        return value
+                    outer += '<' + x
+
+                    for (var i = 0; i < el.attributes.length; i++) {
+                        var attr = el.attributes.item(i)
+                        outer += ' ' + attr.name + (attr.value ? '=' + JSON.stringify(attr.value) : '')
+                    }
+                    outer += el.innerHTML ? '>' + el.innerHTML + '</' + x + '>' :
+                        (voids.indexOf(x) != -1 ? '>' : ' />')
+                    return
+            }
+        })
+        return out ? outer : this
+    }
+
+    function last() {
+        return this.Pow(this[this.length - 1])
+    }
+
+    function querySelector(selectors) {
+        /**
+            返回一个 Pow 对象, 最多只有一个元素, 是当前集合首个匹配选择器的后代元素.
+            selectors 必须为 CSS 选择器字符串.
+         */
+        var po = this.Pow()
+        this.some(function(el) {
+            if (!el || !el.querySelector) return
+            el = el.querySelector(selectors)
+            if (el) {
+                po.push(el)
+                return true
+            }
+        })
+        return po
+    }
+
+    function querySelectorAll(selectors) {
+        /**
+            别名 all. 返回当前集合后代与选择器匹配的元素集合.
+            selectors 必须为 CSS 选择器字符串.
+         */
+        var po = this.Pow()
+        this.forEach(function(el) {
+            if (!el || !el.querySelectorAll) return
+            po.add(el.querySelectorAll(selectors))
+        })
+        return po
     }
 
     function removeAttr(name) {

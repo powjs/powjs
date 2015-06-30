@@ -10,14 +10,40 @@ var batch = require('gulp-batch');
 var concat = require('gulp-concat');
 var uglify = require('gulp-uglifyjs');
 var gzip = require('gulp-gzip');
+var replace = require('gulp-replace');
 
-gulp.task('release', ['build', 'bump'], function(done) {
+gulp.task('release', ['bump'], function(done) {
     function changeParsed(err, log) {
         if (err) {
             return done(err);
         }
         fs.writeFile('CHANGELOG.md', log, done);
     }
+
+    gulp.run('build')
+
+    gulp.src('build/pow.js').pipe(gulp.dest('dist'))
+
+    gulp.src('build/pow.js')
+        .pipe(uglify('pow.min.js', {
+            outSourceMap: true
+        }))
+        .pipe(gulp.dest('dist'))
+
+    gulp.src('build/pow.js')
+        .pipe(gzip({
+            gzipOptions: {
+                level: 9
+            }
+        }))
+        .pipe(gulp.dest('dist'))
+        .pipe(gzip({
+            gzipOptions: {
+                level: 9
+            }
+        }))
+        .pipe(gulp.dest('dist'));
+
     fs.readFile('./package.json', 'utf8', function(err, data) {
         var ref$, repository, version;
         ref$ = JSON.parse(data), repository = ref$.repository, version = ref$.version;
@@ -29,39 +55,60 @@ gulp.task('release', ['build', 'bump'], function(done) {
 });
 
 gulp.task('build', function() {
-    gulp.src('src/*.js')
-        .pipe(concat('pow.js'))
-        .pipe(gulp.dest('.'))
-    gulp.src('pow.js')
-        .pipe(uglify('pow.min.js', {
-            outSourceMap: true
-        }))
-        .pipe(gulp.dest('.'))
+    var version = JSON.parse(fs.readFileSync('./package.json', 'utf8')).version;
 
-    gulp.src('pow.js')
-        .pipe(gzip({ gzipOptions: { level: 9 } }))
-        .pipe(gulp.dest('.'));
-
-    gulp.src('pow.min.js')
-        .pipe(gzip({ gzipOptions: { level: 9 } }))
-        .pipe(gulp.dest('.'));
+    return gulp.src('src/*.js')
+        .pipe(concat('pow.js', {
+            newLine: ';\n\n'
+        })).pipe(replace('@version', version))
+        .pipe(gulp.dest('build'))
 })
 
 gulp.task('bump', function() {
-    return gulp.src('package.json').pipe(gulpBump({
-        type: process.env.TYPE || 'patch'
-    })).pipe(gulp.dest('.'));
+    return gulp.src('./package.json').pipe(gulpBump({
+        type: 'patch'
+    })).pipe(gulp.dest('./'));
 });
 
-// default test
-gulp.task('default', function() {
-    gulp.watch(['test/**', 'src/**'], batch(function(events) {
-        return events.pipe(connect.reload());
+gulp.task('watch', function() {
+    if (!fs.exists('build/pow.js')) {
+        gulp.run('build')
+    }
+
+    gulp.watch(['src/**'], batch(function(events) {
+        gulp.run('build')
     }));
 
+    gulp.watch(['test/**', 'build/pow.js'], batch(function(events) {
+        events.pipe(connect.reload());
+    }));
+})
+
+// default test
+gulp.task('default', ['watch'], function() {
+
     connect.server({
-        root: ['test', 'src'],
-        port: 8080,
+        root: ['test', 'build'],
+        host: '0.0.0.0',
+        port: 6060,
+        livereload: true
+    })
+});
+
+// powjs.github.io
+gulp.task('powjs', ['watch'], function() {
+    var index = fs.readFileSync('../powjs.github.io/index.html', 'utf8')
+        .replace(/src="js\/gohub.js">/, 'src="pow.js">');
+
+    gulp.watch(['../powjs.github.io/**'], batch(function(events) {
+        events.pipe(connect.reload());
+    }));
+
+    // build 目录必须在前
+    connect.server({
+        root: ['build', "../powjs.github.io"],
+        host: '0.0.0.0',
+        port: 6060,
         livereload: true
     })
 });

@@ -6,117 +6,125 @@
     })
 
     global.Pow.extend(global.Pow,
-        compile, compileTag, express, func
+        build, compile, express, func, source
     )
 
-    function compile(tags, receiver) {
+    function build(tags) {
         /**
-            调用 compileTag 编译 tags.
-            compile 主要负责计算 compileTag 的 params 参数.
+            遍历 tags 元素, 根据 tag 间的关系调用 Pow.compile 并传递参数.
             参数:
-                Tags     完整的 Tag 数组, 意味着第一个元素执行时不需要参数.
-                receiver Pipe 中的 receiver 参数, 如果有返回值为 Pipe 对象.
+                tags     数组 [tag ...],  及 Pow.toTags 的结果.
             返回:
-                错误或者编译后的队列数组或者 Pipe 对象, 每个元素都是一个 queue.
+                数组 [[tag, function ...] ...], 每个元素都是 Pow.compile 结果.
+                为方便起见, 该结果在 PowJS 中称作 xTags.
         */
-        var queue, params,
+        var queue, params = [],
             all = [],
-            result = receiver ? this.Pipe().setReceiver(receiver) : []
-
-        for (var i = 0; i < tags.length; i++) {
-            // 先编译, 上级的返回参数和下级的参数一致, 顶级不需要参数即 []
-            params = all[tags[i].$.parentIndex] || []
-            queue = this.compileTag(tags[i], params)
-            if (queue instanceof Error) {
-                return queue
-            }
-            // 缓存返回的参数, 如果没有函数参数不会发生变化.
-            all[i] = queue.length === 1 ? params : queue[queue.length - 1]()[2];
-            result.push(queue)
+            results = []
+        if (typeof tags == 'string') {
+            tags = this.toTags(tags)
         }
+        return tags.some(function(tag, i) {
+            // 上级的返回参数和下级的参数一致, 顶级无参数
+            params = all[tag.parentIndex]
+            queue = this.compile(tag, params)
+            if (queue instanceof Error) {
+                return true
+            }
 
-        return result
+            results.push(queue)
+
+            // 缓存返回的参数, 如果没有函数, 参数不会发生变化.
+            all[i] = queue.length === 1 ? params : queue[queue.length - 1]()[0];
+        }, this) && queue || results
     }
 
-    function compileTag(tag, params) {
+    function compile(tag, params) {
         /**
-            调用指令编译函数编译一个 tag, 指令编译函数执行时 this 对象为 Pow.
+            编译 tag 中的指令.
             参数:
-                tag    完整标签对象, 即 Tags 的一个元素.
+                tag    一个 PowJS 标签对象.
                 params 字符串数组, 参数名列表.
             返回:
-                错误或者称作队列(queue)的数组, 第一元素由 tag 固定值组成的对象, 后续元素为指令编译后的函数.
-                第一元素属性中的 $ 数组
-                    [index, parentIndex, params]
+                函数数组 [tag, function ...]
             细节:
+                过程中产生的错误会被 throw.
                 指令编译函数返回类型影响:
                     undefined 忽略
                     Function  push 进结果中.
                     String    属性字面值
                     Error     终止编译, 返回错误
                     其它      终止编译, 返回未预期错误
-                参数继承:
-                    初始 params 可能继承自上级节点, 此时应剔除第一参数名 "__".
-                    当 tag 包含指令时, 会产生新的参数, 此时应添加第一参数名 "__".
-                    返回值的第一元素事实上无需考虑参数影响.
-                    所以使用者应该总是置 params 第一参数名为 "__", 这样可以简化代码.
          */
-        var err,
-            cfg = this.Config,
-            dirs = this.Directives,
+        var clone, pow = this,
+            cfg = pow.Config,
+            dirs = pow.Directives,
             keys = [],
-            clone = Object.create(null),
-            result = [clone]
+            results = []
 
-        if (tag instanceof Error) return tag
-        clone.$ = [tag.$.index, tag.$.parentIndex, params.slice()]
-        clone.nodeName = tag.nodeName
-        err = this.any(tag, function(text, key) {
+        if (!tag || tag instanceof Error) return tag
+        clone = pow.pick(tag, 'index,parentIndex')
+        clone.attrs = Object.create(null)
+        params = pow.parameters(params)
+        results.push(clone)
+
+        pow.any(tag.attrs, function(text, key) {
             var cc, config, code
-            if (key[0] === '$' || key == 'nodeName') {
-                return
-            }
 
             // 匹配编译指令, 位置只有两种情况
             // dirs 或者 dirs[prefix], 贪心匹配
-            // textContent 也是个指令, 并唯一
-            config = key.toLowerCase().split('-')
+            // nodeName 的值也被当做指令进行匹配
 
-            cc = dirs[config[0]]
-            if (cc && !this.isFunction(cc) && config[1]) {
-                cc = cc[config[1]]
-                config = config.slice(2).join('-')
+            if (!results.length) {
+                if (key != 'nodeName')
+                    throw Error('compile: first key of tag must be nodeName: ' + key)
+                config = text.toLowerCase()
             } else {
-                config = config.slice(1).join('-')
+                config = key.toLowerCase()
             }
 
-            if (this.isFunction(cc)) {
-                code = cc.call(this, config, params, text)
+            // 指令前缀只能有一级
+            code = config.length
+            while (code != -1) {
+                cc = dirs[config.slice(0, code)]
+                if (cc) break
+                code = config.lastIndexOf('-', code)
+            }
+
+            if (pow.isFunction(cc)) {
+                code = cc.call(pow, config.slice(code + 1), params, key == 'nodeName' ? '' : text)
+            } else if (key == 'nodeName') {
+                // nodeName 没有对应的函数
+                code = text
             } else {
                 // 求值表达式
-                code = this.express(key, params, text)
+                code = pow.express(key, params, text)
             }
 
-            switch (this.oString(code)) {
-                case 'Undefined':
-                return
+            switch (pow.oString(code)) {
                 case 'String':
                     // 字面值
-                    clone[key] = code
-                return
-                case 'Error':
-                    return code
+                    clone.attrs[key] = code
+                    return
                 case 'Function':
-                    params = code()[2].slice(1).join(',')
-                    result.push(code)
-                break
-                default:
-                    return Error('compile: unexpected ' + this.oString(code))
-            }
-        }, this)
+                    params = code()[0]
+                    results.push(code)
 
-        if (err) return err
-        return result
+                    // 有 nodeName 处理函数, 加入标记
+                    if (key == 'nodeName') {
+                        clone.nodeNameDI = true
+                    }
+                    break
+                case 'Undefined':
+                    return
+                case 'Error':
+                    throw code
+                default:
+                    throw Error('compile: unexpected ' + pow.oString(code))
+            }
+        })
+
+        return results
     }
 
     function express(propName, params, text) {
@@ -127,10 +135,9 @@
                 node          用于初始化 Node 属性.
                 owTextChanged 事件触发用于绑定更新.
             参数:
-                propName 对求值结果进行 Pow(__).attr(propName,value)
+                propName 对求值结果进行 Pow(this.node).attr(propName,value)
             返回:
                 String   text 不是表达式, 原值返回 text.
-                Error    非法表达式
                 Function 编译后的属性设置函数
         */
         var a, code,
@@ -177,79 +184,54 @@
         })
 
         if (typeof code === 'string') {
-            return Error('unclosed expression: ' + JSON.stringify(code))
+            throw Error('unclosed expression: ' + JSON.stringify(code))
         }
 
         code = code.join('+')
 
         // 非 textBinding 只工作于 tag, 直接赋值
         if (!bind) {
-            return this.func(params, '__.' + propName + '=' + code)
+            // return this.func(params, '__.' + propName + '=' + code)
         }
 
-        // textBinding 工作于 node 和 "owTextChanged", 无返回值
-        if (propName === 'textContent')
-            return this.func(params,
-                '__.textContent=' + code,
-                '', 'node,owTextChanged'
-            )
+        if (propName == 'textContent')
+            return this.func(params, 'this.node.textContent=' + code)
 
-        propName = JSON.stringify(propName)
-        // textBinding 属性
+        // 设置属性
         return this.func(params,
-            'var __k__=' + propName + ',__v__=' + code +
-            ';\nthis.Pow(__).attr(__k__,__v__)',
-            null, 'node,owTextChanged'
+            'this.Pow(this.node).attr(' + JSON.stringify(propName) + ',' + code + ')'
         )
     }
 
-    function nameTrim(v) {
-        return v.trim()
-    }
-
-    // 去除重复
-    function nameIfy(v, i, array) {
-        return v && array.indexOf(v) == i
-    }
-
-    function func(params, code, results, type, object) {
+    function func(params, code, results, name) {
         /**
             生成符合 PowJS 内部机制的指令执行函数.
-            编译函数调用 Pow.func 可保证内部机制有效运行.
             参数:
-                params  输入参数名数组.
+                params  Array/String 输入参数名数组.
                 code    执行体代码.
                 results 输出参数名数组, 缺省等于 params.
-                type    字符串值, 表示指令执行期, 缺省为 'tag'.
-                object  PlainObject, 最终转换为 JSON, 由内部机制处理, 缺省为 null.
+                name    给函数命名.
             返回:
                 Error | 符合 PowJS 内部机制的函数对象.
             提示:
                 调用者可在 code 中自己控制输出, 请参阅源码了解细节.
                 保存功能由其他方法实现, 这里只是存储此参数.
                 无参数调用返回的函数可返回:
-                    [types,params,results,object]
-                其中 types,params,results 都是字符串数组.
-                object 是原值, 内部机制暂时只支持字符串值, 表示存储键值.
+                    [params,results,name]
+                其中 params,results 都是字符串数组.
         */
-        params = ('__,' + (params || '')).split(',')
-        params = params.map(nameTrim).filter(nameIfy)
+        params = this.parameters(params)
 
-        if (results == undefined) {
-            results = params
-        } else if (results != '') {
-            results = ('__,' + results)
-                .split(',').map(nameTrim).filter(nameIfy)
+        if (results == null) {
+            results = params.slice(0)
+        } else {
+            results = this.parameters(results)
         }
 
-        // 保存 [types,params,results,object]
-        type = [
-            (type || 'tag').split(',').map(nameTrim).filter(nameIfy),
-            params, results, object || null
-        ]
+        // 保存 [results,name]
+        name = name ? [results, name] : [results]
 
-        // 把 type 加到第一行
-        code = 'if(!arguments.length) return ' + JSON.stringify(type) + ";\n" +
+        code = 'if(!arguments.length) return ' + JSON.stringify(name) + ";\n" +
             (code && code + ';\n' || '') +
             (results.length ? ('return [' + results.join(',') + ']') : '')
 
@@ -260,6 +242,34 @@
         }
 
         return code
+    }
+
+    function source(tags) {
+        /**
+            转换 build 结果 tags 为 JavaScript 源码.
+         */
+        var space = '    ',
+            indent = '\n' + space + space,
+            str = '['
+
+        tags.forEach(function(items, i) {
+            str += (i && ',' || '') + '\n' + space + '['
+            items.forEach(function(item, i) {
+                if (i) {
+                    str += ','
+                }
+                if (typeof item === 'function') {
+                    i = item.toString()
+                        .replace(/^function[^\(]*/, 'function ')
+                        .split('\n').join(indent)
+                } else {
+                    i = JSON.stringify(item)
+                }
+                str += indent + i
+            })
+            str += '\n' + space + "]"
+        })
+        return str + '\n' + ']'
     }
 
 })(this)

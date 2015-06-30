@@ -1,10 +1,10 @@
-var pow = Pow
+var pow = Pow.New()
 
 module('PowJS')
 test("loading", function() {
     ok(pow, 'pow')
 
-    'watch,Chain,PowJS,compile,toTags'.split(',')
+    'PowJS,compile,toTags,load'.split(',')
         .forEach(function(key) {
             ok(pow[key], 'Pow.' + key)
         })
@@ -56,112 +56,77 @@ test("omit", function(assert) {
     }, 'throw')
 })
 
-test('watcher', function(assert) {
-    var w, o, c = 0
-
-    ok(w = pow.watch(null, "name"), 'defined')
-
-    ok(pow.has(w, 'receiver'), 'has receiver')
-    ok(w.get && w.set, 'has get and set')
-    equal(w.name, 'name', 'named name')
-    ok(w.setters && w.setters.length === 0, 'setters is empty')
-
-    equal(w.get.constructor.name, 'watcherGet', 'watcherGet')
-    equal(w.set.constructor.name, 'watcherSet', 'watcherSet')
-
-
-    ok(o = pow.watch(null, "name", function() {}), 'set')
-
-    ok(pow.has(o, 'name'), 'has name')
-    equal(Object.keys(o), 0, 'enumerable is false')
-
-    w = Object.getOwnPropertyDescriptor(o, 'name')
-    ok(w, 'getOwnPropertyDescriptor')
-    equal(w.get.constructor.name, 'watcherGet', 'watcherGet')
-    equal(w.set.constructor.name, 'watcherSet', 'watcherSet')
-
-    o = Object.create(null)
-    ok(w = pow.watch(o, "name"), 'get watcher')
-    ok(w.name === 'name', 'named name')
-    ok(w.receiver === o, 'receiver eq origin')
-    equal(w.get.constructor.name, 'watcherGet', 'watcherGet')
-    equal(w.set.constructor.name, 'watcherSet', 'watcherSet')
-    ok(w.setters, 'has setters')
-    equal(w.setters.length, 0, 'setters is empty')
-    w.setters.push(function() {
-        c++
-    })
-
-    o.name = 1
-    equal(w.value, o.name, 'equal')
-    equal(c, o.name, 'counter')
-    equal(c, w.get(), 'watcher.get()')
-    o.name++
-        equal(c, o.name, 'counter again')
+test("parameters", function() {
+    deepEqual(pow.parameters(), [], 'none arguments')
+    deepEqual(pow.parameters(''), [], '""')
+    deepEqual(pow.parameters([]), [], '""')
+    deepEqual(pow.parameters(',a,a'), ['a'], '[a]')
+    deepEqual(pow.parameters(['', 'a,b']), ['a', 'b'], '[a,b]')
+    deepEqual(pow.parameters(['', ['a,b', 'c', 'a']]), ['a', 'b', 'c'], '[a,b,c]')
 })
 
-test('watch setter only', function() {
-    var w, c = 0,
-        o = Object.create(null)
+test("Promise", function(assert) {
+    var p1, p2, done = assert.async(),
+        c = []
 
-    Object.defineProperty(o, 'c', {
-        configurable: true,
-        get: function() {
-            return ++c
-        }
+    // 用 setTimeout 模拟异步, 偶尔会不靠谱
+    setTimeout(function() {
+        assert.equal(JSON.stringify(c), '[{"a":1,"b":1},1,2,4,3]');
+        done()
+    }, 400)
+
+    p1 = pow.Promise(function(f, r) {
+        var v = {}
+        c.push(v)
+        setTimeout(function() {
+            f(v);
+        }, 200)
+    }, 1)
+
+    p2 = p1.then(function(v) {
+        v.a = 1
+        c.push(1)
+        return v
     })
 
-    equal(o.c, c, 'same')
-    equal(c, 1, 'is 1')
-
-    w = pow.watch(o, 'c')
-    ok(w && w.setters, 'watcher')
-
-    w.setters.push(function() {
-        ++c
+    p1.then(function(v) {
+        c.push(2);
+        return {}
     })
-    equal(c, 1, 'no changed')
-    o.c = 888
-    equal(c, 2, 'changed')
-    equal(o.c, c, 'must be write fail')
-    equal(c, 3, '3')
-    w.value = 999
-    equal(o.c, 4, '4')
+
+    p2.then(function(v) {
+        c.push(3)
+        return 3
+    })
+
+    p1.then(function(v) {
+        v.b = 1;
+        c.push(4)
+    })
+
 })
 
-module('building')
+module('building & load')
 test("building", function(assert) {
     var html = '<div class="well" func="object">\
-    <label>Name:</label>\
-    <input type="text" valueTo="object.name" />\
-    <h3>Hello {{name}}!</h3></div>',
-        chs = pow.Chain(),
+    <h3>Hello {{object.name}}</h3>\
+    <input type="text" />\
+    </div>',
         tags = pow.toTags(html)
 
     equal(pow.oString(tags), 'Array', 'Tags test')
-    ok(!tags.some(function(tag) {
-        var params
-        if (tag.$.parentIndex === -1) {
-            params = []
-        } else {
-            params = this[tag.$.parentIndex]
-            params = params[params.length - 1]
-            if (typeof params === 'function') {
-                params = params()[2]
-            } else {
-                // 需要递归求 params
-                params = []
-            }
-        }
+    equal(tags.length, 4, "tags.length")
 
-        tag = pow.compile(tag, params)
-        if (pow.isError(tag)) {
-            return true
-        }
-        this.add(tag)
-    }, chs), 'compile')
+    tags = pow.build(tags)
 
-    console.log(chs)
+    console.log(pow.source(tags))
+
+    equal(
+        pow(pow.load(tags)([{
+            name: "PowJS"
+        }])).html(),
+        '<div class="well"><h3>Hello PowJS</h3><input type="text"></div>',
+        'html')
 })
 
 module('xjson')

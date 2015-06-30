@@ -67,8 +67,10 @@
 
             if (node.nodeName === 'VAR' || node.nodeName === 'PARAM') {
                 if (val === 'true')
-                    val = trueelse if (val === 'false')
-                    val = falseelse if (val === 'null')
+                    val = true
+                else if (val === 'false')
+                    val = false
+                else if (val === 'null')
                     val = null
                 else
                     val = Number(val)

@@ -1,89 +1,73 @@
 (function(global) {
     "use strict"
-    var textTags = global.Pow.Config.textTags = ['#text', '#comment', 'SCRIPT']
+    var textTags = global.Pow.Config.textContentTags = ['#text', '#comment', 'script']
 
     global.Pow.extend(global.Pow, toTags,
         toNode,
-        nodeFilter
+        textTrimFilter
     )
 
-    function toTags(root, filter) {
+    function toTags(node, nodeFilter) {
         /**
-            遍历 root 后代节点, 提取的 nodeName 和 attributes 属性返回一个对象数组.
+            遍历 node 后代节点, 提取节点 nodeName, attributes, 返回 node 节点树平面化数组.
             参数:
-                root    是 htmlSrc 或者 DOM Node.
-                filter  节点过滤(预处理)函数 function (node), 返回处理后的节点, 假值跳过节点.
-                            缺省为 nodeFilter.
-            返回值:
-                如果 root.childNodes 不是 NodeList 抛出异常.
-                如果 root 是 <template xjson> 返回 Pow.ISXJSON
-                其他返回 Tag 数组(称做 Tags):
+                node    是 htmlSrc 或者 DOM Node.
+                filter  NodeFilter, 缺省值为 Pow.textTrimFilter.
+            返回:
+                返回 Tag 数组:
                 [
                     {
-                        $:Object,         // 编译生成的附加属性对象
-                        nodeName: String, // nodeName
-                        // ... 其他属性 key/value, 提取自 attributes
+                        attrs: Object,       // 提取自 nodeName, attributes
+                        index: Number,       // 该节点下标
+                        parentIndex: Number  // 父节点的下标, 顶层为 -1
                     }
                 ]
-            #text, #comment 节点没有 attributes, 提取唯一的 textContent 属性.
-            附加属性($ 属性之下)
-                index: Number // 该节点下标
-                parentIndex: Number // 父节点的下标, 顶层为 -1
+            #text, #comment 等节点没有 attributes, 提取唯一的 textContent 属性.
         */
-        // ??? 缺少对 root 为 body 的属性提取支持
-        var t, tag, attrs, attr, tags, prev
+        // ??? 缺少对 node 为 body 的属性提取支持
+        var iter, tag, attrs, attr, prev, tags = []
 
-        root = this.toNode(root)
+        node = this.toNode(node)
 
-        if (root.nodeName === 'TEMPLATE') {
-            if (root.getAttribute('xjson') != undefined) {
-                return this.ISXJSON
-            }
-        }
-
-        this.ift(!(root.childNodes instanceof NodeList), null, root)
-        filter = filter || this.nodeFilter
-        tags = []
-
-        t = document.createTreeWalker(root)
-        prev = t.root
-        while (t.nextNode()) {
-            // 变量复用
-            root = filter(t.currentNode)
-            if (!root) continue
+        iter = document.createNodeIterator(node, NodeFilter.SHOW_ALL, nodeFilter || this.textTrimFilter)
+        prev = iter.nextNode() // 上一个, 第一次调用值为 iter.root
+        while (node = iter.nextNode()) {
             tag = Object.create(null)
-            tag.$ = Object.create(null)
-            tag.$.index = tags.length // 节点序号
+            tag.attrs = Object.create(null)
+            tag.index = tags.length // 节点序号
+
+            // 先提取 nodeName 可保障自定义定义 nodeName 指令先执行.
+            tag.attrs.nodeName = node.nodeName.toLowerCase()
 
             // 判断层级关系, 确定父节点序号, 顶层节点的 parentIndex 为 -1
-            if (prev === root.parentNode) {
+            if (prev === node.parentNode) {
                 // 父子关系
-                tag.$.parentIndex = tags.length - 1
+                tag.parentIndex = tags.length - 1
             } else {
                 // 追述 parentIndex
-                tag.$.parentIndex = tags[tags.length - 1].$.parentIndex
-                while (prev.parentNode !== root.parentNode) {
+                tag.parentIndex = tags[tags.length - 1].parentIndex
+                while (prev.parentNode !== node.parentNode) {
                     prev = prev.parentNode
-                    tag.$.parentIndex = tags[tag.$.parentIndex].$.parentIndex
+                    tag.parentIndex = tags[tag.parentIndex].parentIndex
                 }
             }
 
             // 先提取 attributes
 
-            attrs = root.attributes
-            if (attrs && textTags.indexOf(tag.nodeName) === -1) {
+            attrs = node.attributes
+            if (attrs) {
                 for (var i = 0, l = attrs.length; i < l; i++) {
                     attr = attrs.item(i)
-                    tag[attr.nodeName] = attr.value
+                    tag.attrs[attr.nodeName] = attr.value
                 }
-            } else {
-                tag.textContent = root.textContent
             }
 
-            // nodeName 最后提取, 可保障用户定义 nodeName 指令.
-            tag.nodeName = root.nodeName
+            if (textTags.indexOf(tag.attrs.nodeName) !== -1) {
+                tag.attrs.textContent = node.textContent
+            }
+
             tags.push(tag)
-            prev = root
+            prev = node
         }
         return tags
     }
@@ -123,16 +107,29 @@
         return doc.documentElement
     }
 
-    function nodeFilter(node) {
+    function textTrimFilter(node) {
         /**
-            默认的节点过滤器, 过滤 Text Node 两端的白字符.
+            NodeIterator 过滤器.
+            如果 node 不是 TEXT NODE, 返回 NodeFilter.FILTER_ACCEPT;
+            否则剔除 textContent 两端的白字符, 返回:
+                node.textContent ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
          */
-        var text
-        if (node.nodeType == document.TEXT_NODE) {
-            text = node.textContent.trim()
-            if (!text) return
-            node.textContent = text
-        }
-        return node
+        if (node.nodeType != document.TEXT_NODE)
+            return NodeFilter.FILTER_ACCEPT
+        node.textContent = node.textContent.trim()
+        return node.textContent ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    }
+
+    function textTabFilter(node) {
+        /**
+            NodeIterator 过滤器.
+            如果 node 不是 TEXT NODE, 返回 NodeFilter.FILTER_ACCEPT;
+            否则剔除 textContent 两端的 "\n","\t", 返回:
+                node.textContent ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+         */
+        if (node.nodeType != document.TEXT_NODE)
+            return NodeFilter.FILTER_ACCEPT
+        node.textContent = node.textContent.trim()
+        return node.textContent ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     }
 })(this)
