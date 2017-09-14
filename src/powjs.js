@@ -11,15 +11,16 @@ const TEXT_NODE = 3,
 	CHILDS = 2,
 	FN = 3,
 	toString = Object.prototype.toString,
+	slice = Array.prototype.slice,
 	TMPL = /{{|}}/m,
 	directives = Object.create(null);
 
-directives.args = function(args) {
-	throw new Error('never used');
+directives.param = function(args) {
+	return args;
 }
 
 directives.if = function(exp) {
-	throw new Error('never used');
+	return 'if(!(' + (exp || '0') + ')) return;';
 }
 
 directives.let = function(exp) {
@@ -95,14 +96,15 @@ function firstChild(source) {
 
 function PowJS(parent, view, context) {
 	context.node = null;
+	context.flag = 0;
 	this.parent = parent;
 	this.view = view;
 	this.$ = context;
 }
 
-function toScript(_, view) {
+function toScript(sum, view) {
 	// 固定次序 [TAG,ATTRS,CHILDS,FN]
-	return '["' + view[TAG] + '",' +
+	return sum + (!!sum && ',' || '') + '["' + view[TAG] + '",' +
 
 		JSON.stringify(view[ATTRS]) +
 
@@ -111,12 +113,12 @@ function toScript(_, view) {
 
 		(view[FN] && view[FN].toString()
 			.replace(/^function anonymous\(/, 'function (')
-			.replace("\n/*``*/", '')) + ']' || 'null';
+			.replace("\n/*``*/", '') || 'null') + ']';
 }
 
 PowJS.prototype.export = function() {
 	return (this.view && this.view.length) &&
-		toScript('', this.view) || '[]';
+		toScript('', this.view) || 'null';
 }
 
 PowJS.prototype.childNodes = function() {
@@ -145,30 +147,35 @@ PowJS.prototype.create = function() {
 		this.$.node.setAttribute(key, attrs[key]);
 }
 
-PowJS.prototype.render = function(...args) {
-	let node = this.$.node;
-	// 根调用, 自创建
-	if (!node)
+PowJS.prototype.render = function() {
+	let args = slice.call(arguments, 0);
+
+	if (!this.$.node)
 		return this.view[FN].apply(this, args);
-	// 渲染子节点
-	for (let view of this.view[CHILDS] || []) {
-		if (this.$.flag) break;
-		new PowJS(node, view, this.$).render(...args);
-	}
-	// 恢复
-	this.$.node = node;
-	if (this.$.flag != -1)
-		this.$.flag = 0;
+	each(this.$, this.view[CHILDS], args);
 }
 
-PowJS.prototype.each = function(iterator, ...args) {
+function each($, views, args) {
+	let node = $.node;
+	views && views.some(function(view) {
+		if ($.flag) return true;
+		let pow = new PowJS(node, view, $);
+		pow.render.apply(pow, args);
+	})
+	$.node = node;
+}
+
+PowJS.prototype.each = function(iterator) {
 	let k = 0,
+		views = this.view[CHILDS],
+		args = slice.call(arguments, 1),
 		i = args.length;
 
 	// 根调用
 	if (!this.$.node) {
-		this.$.flag = 1;
+		this.view[CHILDS] = null;
 		this.view[FN].apply(this, args);
+		this.view[CHILDS] = views;
 	}
 
 	args = args.concat([null, null]);
@@ -178,18 +185,16 @@ PowJS.prototype.each = function(iterator, ...args) {
 			if (this.$.flag) break;
 			args[i] = iterator[k];
 			args[i + 1] = k;
-			this.render.apply(this, args);
+			each(this.$, views, args);
 		}
 	} else {
 		for (let v of iterator) {
 			if (this.$.flag) break;
 			args[i] = v;
 			args[i + 1] = k++;
-			this.render.apply(this, args);
+			each(this.$, views, args);
 		}
 	}
-	if (this.$.flag != 1)
-		this.$.flag = 0;
 }
 
 PowJS.prototype.text = function(text) {
@@ -223,7 +228,7 @@ PowJS.prototype.attr = function(key, val) {
 }
 
 PowJS.prototype.slice = function(array, start, end) {
-	return Array.prototype.slice.call(array, start, end)
+	return slice.call(array, start, end)
 }
 
 function compile(view, node, prefix, discard, args) {
@@ -245,15 +250,14 @@ function compile(view, node, prefix, discard, args) {
 
 	view[TAG] = node.nodeName;
 	view[ATTRS] = view[CHILDS] = null;
-	if (node.hasAttribute(prefix + 'args')) {
-		args = (node.getAttribute(prefix + 'args') || '').trim();
+	if (node.hasAttribute(prefix + 'param')) {
+		args = directives.param((node.getAttribute(prefix + 'param') || '').trim());
 	}
 
 	if (node.hasAttribute(prefix + 'if')) {
-		body = (node.getAttribute(prefix + 'if') || '').trim();
-
-		body = 'if(!(' + (body || '0') + ')) return;';
+		body = directives.if((node.getAttribute(prefix + 'if') || '').trim() || '0');
 	}
+
 	body += 'this.create();';
 
 	for (let i = 0; i < node.attributes.length; i++) {
@@ -272,7 +276,7 @@ function compile(view, node, prefix, discard, args) {
 			}
 			continue;
 		}
-		if (name == 'if' || name == 'args') continue;
+		if (name == 'if' || name == 'param') continue;
 
 		if (!each && !render) {
 			render = name == 'render' && val || '';
@@ -284,6 +288,7 @@ function compile(view, node, prefix, discard, args) {
 
 	if (!render && !each)
 		body += directives.render(args);
+
 	view[FN] = new Function(args, body);
 	for (let i = 0; i < node.childNodes.length; i++) {
 		if (node.childNodes[i].nodeType == COMMENT_NODE)
