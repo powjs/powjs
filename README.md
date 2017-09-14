@@ -1,207 +1,174 @@
 # PowJS
 
-*PowJS 仍在开发中, 所有特性尚未固定, 期待您的反馈建议 [issues][]*
+PowJS 仍在开发中, 此文档提及的特性是已经确定的.
 
-PowJS 像写程序一样写 HTML, 是比框架更低级的 HTML 增强工具.
-HTML 模板先由浏览器生成 DOM tree, 然后分析 DOM tree 编译成 JavaScript 执行.
+PowJS 模板引擎支持:
 
-## 源代码
+    采用原生 JavaScript 表达式
+    编译一个 DOM Node 模板
+    编译一个祖标签的 HTML 源码模板
+    导出视图, 数组形式的 JavaScript 源码
+    渲染视图到 DOM Node
+    文本节点求值语法 {{ expr }}, 剔除两端空白
+    缺省执行函数形参为 (v,k)
 
-PowJS API 源代码:
-
-```html
-<template>
-<h1 forgo-nextSiblings-if="!Pow.HASDOC">
-    <fragment if="!Pow.HASDOC" forgo-nextSiblings>
-        糟糕! min 版无法提取 API 文档.
-    </fragment>
-    PowJS API
-</h1>
-<ul var-api="Pow.docez()" repeat-api>
-    <li class="api-{{key}}">{{key}}</li>
-</ul>
-</template>
+```
+模板----->PowJS<----->视图(导出,载入)
+           |
+           V
+          渲染
 ```
 
-通常认为上面的源代码由三种元素组成:
-
-1. 指令       存在于标签名和属性中. 有对应的指令名称.
-2. 求值表达式 存在于非指令的属性值和文本节点中, 被一对儿 "{{","}}" 包裹.
-3. 定值       非指令和求值表达式的其它 HTML 节点描述.
-
-事实上, 在 PowJS 中求值表达式是一条内置的赋值指令, 计算表达式的值并赋值到节点属性. 
-所有的指令都被函数化, 因此 PowJS 中其实只有两种元素:
-
-1. 函数      具名指令和赋值指令
-2. 定值      描述节点固定属性
-
-上例中出现六条指令:
-
- - forgo    标记丢弃指定范围的节点, "nextSiblings" 表示后续兄弟节点.
- - fragment 表示当前节点是个 DocumentFragment, 是无标签透明的, 子节点会被上提
- - if       当表达式成立时, 执行同节点后续指令, 否则忽略同节点后续指令.
- - var      定义向后传递的参数
- - repeat   遍历对象, 重复执行当前位置之后的节点
- - {{key}}  赋值指令, 两次出现分别赋值给节点的 "class" 属性和 "textContent".
-
-提示: if 指令不丢弃节点, 只是忽略后续指令. forgo 丢弃节点, 但不一定忽略后续指令.
+```js
+function PowJS(source, mixed, ...data) {
+    /**
+     * 随参数的不同进行编译, 载入, 渲染.
+     * source:
+     *      string      要编译的 HTML 源码, 单个祖标签
+     *      Node        要编译的 DOM 节点
+     *      Array       要载入的已编译好的 PowJS 视图
+     *      其它        抛出错误或渲染结果为空
+     * mixed:
+     *      Node        渲染并替换掉该节点
+     *      Object      上下文对象, 用于编译或渲染的参数
+     * data:
+     *      渲染数据
+     *
+     * 返回: PowJS 实例
+     */
+}
+```
 
 ## 指令
 
-### 具名指令
+指令是标签的一个属性, 属性值是 *JavaScript 表达式或语句*.
+每个标签的所有指令生成一个被 render 函数调用的 *执行函数*,
 
-格式为:
+    param  ="...args"   声明执行函数的形参
+    if     ="condition" 条件成立节点才会被渲染
+    let    ="赋值语句"  设置局部变量
+    do     ="code"      直接执行代码
+    text   ="expr"      赋值当前节点的 textContent 值并返回
+    html   ="expr"      赋值当前节点的 innerHTML 值并返回
+    skip   ="condition" 条件成立或为空时返回, 不渲染子节点
+    end    ="condition" 条件成立或为空时终止, 不渲染后续节点
+    render ="...args"   带参数渲染子节点一次并返回
+    each   ="I,...args" 迭代 I 调用 this.render(...args, v, k) 并返回
+                        v, k 是 I 的迭代值和键名
+                        但是, 子节点执行函数形参由使用者负责
 
-    name[-suffix][="body"]
+提示: 渲染是渲染子节点, 根实例总是把渲染节点作为子节点处理
 
-以 "-" 作为分界符, 以最长匹配指令名. 如果匹配成功, 指令被分成三部分.
+### 执行函数
 
-- name    指令名, 对应指令编译函数
-- suffix  指令后缀, 作为参数传递给指令编译
-- body    指令体, 作为参数传递给指令编译
+构建执行函数的次序
 
-很明显标签名也符合此格式, 只是仅有 name 部分, 例如 fragment. 
+    0. 构建开始, 传入形参为 v, k.
+    1. 如果有 param 指令先确定形参, 否则使用继承的形参
+    2. 如果有 if 指令优先生成
+    3. 构建节点 this.create()
+    4. 按指令在属性中的次序生成执行代码
+    5. 如果未使用 render 和 each 指令, 生成一个 this.render
+    6. 遍历子孙节点重复步骤 1
 
-指令编译函数根据 suffix, body 生成指令执行函数. 根据 HTML 标准属性名不区分大小写, 
-所以 PowJS 总是把 name, suffix 转换为纯小写. PowJS 是这样调用指令编译函数的
+编译器不能理解 render, each 对后续形参的影响, 这交由使用者负责.
+
+### 示例
+
+```html
+<tag param='a, a+b'/>
+```
 
 ```js
-Pow.Directives[name](suffix, paramsNames, body)
+ function(a, b) {
+    this.create();
+    return this.render(a, a+b); // 自动生成
+ }
 ```
-
-所有指令编译函数位于 Pow.Directives 下, 他们生成指令执行函数.
-指令执行有上下文, 有参数传递, paramsNames 就是上文传递的参数名(不是参数),
-真正的参数传递在指令执行函数中进行.
-
-suffix 由具体的指令编译函数解析, 良好的 suffix 设计会让代码可读性更好更优雅.
-
-指令间的关系和源代码表现得结构完全一致, 父子节点对应嵌套代码, 兄弟节点对应顺序代码,
-而同一个节点下的属性中的指令也是嵌套关系.
-
-提示: name, suffix 中可以包含 "-", 所以 Pow.Directives 下的指令只有一层深度.
-
-### 赋值指令
-
-格式:
-
-    [literals]{{[#obj.prop] express}}[literals]
-
-其中
-
-- literals   为字面值.
-- #obj.prop  用于文本绑定, 当 obj.prop 被赋值时, 赋值指令被再次执行.
-- express    是个标准的 JavaScript 求值表达式.
-
-最终计算的值是个字符串.
-如果赋值指令位于标签属性值中, 最终值被赋值给相应的属性.
-如果位于文本节点中, 最终值被赋值给所属节点的 "textContent".
-
-赋值指令可以包含多段
-
-    Hi {{user.gender=='female'?'Girl':'Boy'}}, you have {{message.length}} message.
-
-## ready
-
-通常使用显示代码绑定 `document.onreadystatechange` 在页面加载完成时触发 ready 函数.
-PowJS 使用另外一种方式 `meta onreadyState`, 在页面加入一行:
 
 ```html
-<meta name="onreadystate" content="complete" powjs>
+<tag if(a) param='a,b' render='a+b'/>
 ```
 
-如果页面加载了 powjs 那么, 那么 PowJS 从页面自动提取模板和数据, 并执行.
-如果没有加载 powjs, 那么这不会产生任何副作用.
-
-## xjson
-
-xjson 以 HTML 标签包装 JSON. 使 JSON 数据以 HTML 展现.
-
-数据类型和标签名对应关系
-
-    null     var
-    true     var
-    false    var
-    Number   var
-    Object   div
-    Array    div[array]
-    String   表单元素, var, param, div, head 等特殊标签以外的标签
-
-null, true, false, Number 的值可智能识别.
-String 类型的值根据标签不同从 src, href, textContent, innerHTML 提取.
-
-在属性中有两种形式指定键名
-
-    keyname
-    name="keyName"
-
-如果键名是纯小写的, 可用第一种形式简化写法用属性名表示, 否则用第二种完整写法.
-
-用 xjson 表现 https://api.github.com/orgs/powjs/repos 部分代码
+```js
+ function(a, b) {
+    if(!a) return;
+    this.create();
+    return this.render(a+b);
+ }
+```
 
 ```html
-<div xjson array>
-    <div>
-        <var id>24525592</var>
-        <h1 name>powjs</h1>
-        <p full_name>powjs/powjs</p>
-        <div owner>
-            <p login>powjs</p>
-            <var id>24525592</var>
-            <img avatar_url src="https://avatars.githubusercontent.com/u/8936527?v=3">
-            <a url>https://api.github.com/users/powjs</a>
-        </div>
-    </div>
-</div>
+ <tag param='a, b , array' let='c=a*2' code='a++' if='b'
+      skip='b.valid()' text='"ok"' html='b.html()'
+      each='array,b'
+ />
 ```
 
-如果要嵌入源码字符串, 可用标签也很多, 甚至可以使用 `script`
-
-```html
-    <script summary type="text/plain">HTML enhanced for web apps</script>
-    <script summary type="text/html">
-        <b>HTML enhanced for web apps</b>
-    </script>
-    <script content type="text/markdown">
-    PowJS
-    =====
-    </script>
+```js
+ function(a, b, array) {
+    if(!b) return;
+    var c=a*2;
+    a++;
+    if(b.valid()) return;
+    return this.text("ok");    // 本例下面的代码不会被执行
+    return this.html(b.html());
+    return this.each(array, b);
+ }
 ```
 
-只是声明 `type` 属性让浏览器不把它当做脚本执行就可以了.
+### 模板实例
 
-如果内容中包含 `script` 标签, 您也可以使用 `template` 标签.
+属性:
 
-```html
-<template htmlcode>
-<b>HTML</b> in here, non-xjson
-<script>
-    var app=Pow.New()
-</script>
-<template>
+    view    编译生成的视图数组, 完整的节点树
+    parent  父节点(渲染子节点的容器)
+    $       参见 [Context](#Context)
+
+方法:
+
+    render(...)  渲染方法, 渲染子节点一次
+    each(...)    渲染方法, 迭代渲染子节点
+    node()       指令可用, 返回 this.$.node
+    end()        对应指令
+    text(expr)   对应指令, 设置或返回 this.node().textContent
+    html(expr)   对应指令, 设置或返回 this.node().innerHTML
+    attr(...)    辅助方法, 设置或返回 this.node() 属性值
+    slice(...)   辅助方法, 调用 Array.prototype.slice
+    export()     辅助方法, 导出视图为 JavaScript 源码
+    childNodes() 辅助方法, 返回 this.parent.childNodes
+    firstChild() 辅助方法, 返回 this.parent.firstChild
+    create()     内部方法, 构建当前节点
+
+重要: 节点 `由外向内构建`, `由内向外装配` 到父节点
+
+### Context
+
+this.$ 是渲染时的上下文对象
+
+    prefix   编译选项, string   指令前缀, 缺省为 ''
+    discard  编译选项, [string] 被丢弃的属性名列表, 缺省为 []
+    flag     渲染标记, 内部维护, -1 表示被 end() 结束
+    node     渲染对象, 当前节点对象
+    其它     用户自定义上下文值
+
+
+### 文本节点
+
+文本节点求值语法 {{ expr }}, 并剔除两端空白, 空白节点被忽略.
+
+当整个模板是一个文本节点时, 默认的形参自然生效:
+
+```js
+function(v,k){
+    this.create();
+    this.text(/*文本节点求值表达式*/);
+}
 ```
 
-*使用 xjson 对搜索引擎是友好的.*
 
-## New
+# License
 
-PowJS 中没有 App 的概念, Pow.New 方法提供了更好的解决方案.
+MIT License [https://github.com/powjs/powjs/blob/master/LICENSE]()
 
-    Pow.New() 生成一个新的 Pow 对象 
-
-调用 Pow 方法的时候, 会产生一些对象, 可以把这些对象保存在当前的 Pow 对象下.
-Pow.New() 产生的新 Pow 对象和原对象就隔离了.
-
-## 兼容性
-
-PowJS 使用符合 [ECMAScript][] 标准及 [HTML5][] 标准 API 编写, 在现代浏览器下测试通过.
-兼容陈旧浏览器请搜索 [polyfill][], 有很多项目专门解决此类问题, PowJS 不重复此方面工作.
-
-# LICENSE
-
-Copyright (c) 2014 The PowJS Authors.
-Use of this source code is governed by a MIT license that can be found in the LICENSE file.
-
-[ECMAScript]: http://www.ecma-international.org/ecma-262/5.1/
-[HTML5]: http://www.w3.org/TR/html5/
-[polyfill]: https://github.com/search?l=JavaScript&o=desc&q=polyfill&s=stars&type=Repositories&utf8=✓
-[issues]: https://github.com/powjs/powjs/issues
+[PowJS]: https://github.com/powjs/powjs
