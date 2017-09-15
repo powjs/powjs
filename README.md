@@ -13,7 +13,7 @@ PowJS 模板引擎支持:
     缺省执行函数形参为 (v,k)
     支持继承形参, 推导形参
 
-```
+```text
 模板----->PowJS<----->视图(导出,载入)
            |
            V
@@ -221,7 +221,6 @@ this.$ 是渲染时的上下文对象
     node     渲染对象, 当前节点对象
     其它     用户自定义上下文值
 
-
 ### 文本节点
 
 文本节点求值语法 {{ expr }}, 并剔除两端空白, 空白节点被忽略.
@@ -235,9 +234,8 @@ function(v,k){
 }
 ```
 
+## License
 
-# License
-
-MIT License https://github.com/powjs/powjs/blob/master/LICENSE
+MIT License <https://github.com/powjs/powjs/blob/master/LICENSE>
 
 [PowJS]: https://github.com/powjs/powjs
