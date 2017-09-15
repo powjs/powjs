@@ -20,7 +20,7 @@ PowJS 模板引擎支持:
 ```
 
 ```js
-function PowJS(source, mixed, ...data) {
+function PowJS(source, mixed /*, ...renderArgs*/) {
     /**
      * 随参数的不同进行编译, 载入, 渲染.
      * source:
@@ -31,7 +31,8 @@ function PowJS(source, mixed, ...data) {
      * mixed:
      *      Node        渲染并替换掉该节点
      *      Object      上下文对象, 用于编译或渲染的参数
-     * data:
+     *      其它        忽略
+     * renderArgs:
      *      渲染数据
      *
      * 返回: PowJS 实例
