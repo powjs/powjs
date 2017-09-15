@@ -1,6 +1,6 @@
 # PowJS
 
-PowJS 仍在开发中, 此文档提及的特性是已经确定的.
+[PowJS][] 仍在开发中, 此文档提及的特性是已经确定的.
 
 PowJS 模板引擎支持:
 
@@ -238,6 +238,6 @@ function(v,k){
 
 # License
 
-MIT License [https://github.com/powjs/powjs/blob/master/LICENSE]()
+MIT License https://github.com/powjs/powjs/blob/master/LICENSE
 
 [PowJS]: https://github.com/powjs/powjs
