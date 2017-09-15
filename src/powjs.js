@@ -51,34 +51,36 @@ directives.each = function(args) {
 	return 'return this.each(' + args + ')';
 }
 
-module.exports = function Pow(source, mixed, renderArgs) {
+module.exports = function Pow(source, mixed /*,...renderArgs*/ ) {
 	let view = [],
 		prefix = '',
 		discard = [];
 
-	if (typeof mixed === 'object') {
-		prefix = mixed.prefix || '';
-		discard = !mixed.discard ? discard :
-			(typeof mixed.discard === 'string' && [mixed.discard] ||
-			Array.isArray(mixed.discard) && mixed.discard || []);
-	}
 
 	if (typeof source === 'string')
 		source = firstChild(source);
+
+	if (toString.call(mixed) === '[object Object]') {
+		prefix = mixed.prefix || '';
+		discard = typeof mixed.discard === 'string' && [mixed.discard] ||
+			Array.isArray(mixed.discard) && mixed.discard || discard;
+	} else {
+		mixed = mixed || Object.create(null);
+	}
 
 	if (source instanceof Node)
 		compile(view, source, prefix, discard, 'v,k');
 	else if (Array.isArray(source))
 		view = source;
-	let pow = new PowJS(
-		document.createDocumentFragment()
-			.appendChild(document.createElement('BODY')),
-		view,
-		typeof mixed === 'object' && mixed || Object.create(null)
-	);
 
-	if (Array.isArray(renderArgs) || mixed instanceof Node) {
-		pow.render.apply(pow, renderArgs);
+	let pow = new PowJS(
+		document.createDocumentFragment().appendChild(
+			document.createElement('BODY')), view,
+		toString.call(mixed) === '[object Object]' &&
+		mixed || Object.create(null));
+
+	if (arguments.length > 2 || mixed instanceof Node) {
+		pow.render.apply(pow, slice.call(arguments, 2));
 		if (mixed instanceof Node &&
 			typeof mixed.replaceWith === 'function')
 			mixed.replaceWith(pow.firstChild());
@@ -271,7 +273,7 @@ function compile(view, node, prefix, discard, args) {
 			val = attr.value.trim();
 
 		if (!di) {
-			if (discard && discard.indexOf(name) == -1) {
+			if (discard.indexOf(name) == -1) {
 				view[ATTRS] = view[ATTRS] || Object.create(null);
 				view[ATTRS][name] = val;
 			}
