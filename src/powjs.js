@@ -231,10 +231,11 @@ PowJS.prototype.slice = function(array, start, end) {
 	return slice.call(array, start, end)
 }
 
+const ending = 'text html render each';
+
 function compile(view, node, prefix, discard, args) {
 	let body = '',
-		render = '',
-		each = '';
+		render = '';
 
 	if (node.nodeType === TEXT_NODE) {
 		body = parseTemplate(node.textContent.trim());
@@ -276,20 +277,21 @@ function compile(view, node, prefix, discard, args) {
 			}
 			continue;
 		}
-		if (name == 'if' || name == 'param') continue;
-
-		if (!each && !render) {
-			render = name == 'render' && val || '';
-			each = name == 'each' && val || '';
-		}
+		if (render || name == 'if' || name == 'param') continue;
 
 		body += di(val);
+		if (ending.indexOf(name) + 1)
+			render = name;
 	}
 
-	if (!render && !each)
+	if (!render) {
 		body += directives.render(args);
+	}
 
 	view[FN] = new Function(args, body);
+
+	if (render == 'html' || render == 'text') return;
+
 	for (let i = 0; i < node.childNodes.length; i++) {
 		if (node.childNodes[i].nodeType == COMMENT_NODE)
 			continue;
