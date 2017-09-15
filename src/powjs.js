@@ -41,8 +41,8 @@ directives.skip = function(exp) {
 		'if(' + exp + ') return;';
 }
 directives.end = function(exp) {
-	return !exp && 'return this.end();' ||
-		'if(' + exp + ') return this.end();';
+	return !exp && 'this.end();' ||
+		'if(' + exp + ') this.end();';
 }
 directives.render = function(args) {
 	return 'return this.render(' + args + ')';
@@ -158,12 +158,15 @@ PowJS.prototype.render = function() {
 }
 
 function each($, views, args) {
-	let node = $.node;
+	let node = $.node,
+		flag = $.flag;
+	$.flag = 0;
 	views && views.some(function(view) {
 		if ($.flag) return true;
 		let pow = new PowJS(node, view, $);
 		pow.render.apply(pow, args);
-	})
+	});
+	$.flag = flag;
 	$.node = node;
 }
 
@@ -233,7 +236,7 @@ PowJS.prototype.slice = function(array, start, end) {
 	return slice.call(array, start, end)
 }
 
-const ending = 'text html render each';
+const ending = 'text html render each'.split(' ');
 
 function compile(view, node, prefix, discard, args) {
 	let body = '',

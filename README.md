@@ -51,8 +51,8 @@ function PowJS(source, mixed /*, ...renderArgs*/) {
     do     ="code"          直接执行代码
     text   ="expr"          赋值当前节点的 textContent 值并返回
     html   ="expr"          赋值当前节点的 innerHTML 值并返回
-    skip   ="condition"     条件成立或为空时返回, 不渲染子节点
-    end    ="condition"     条件成立或为空时终止, 不渲染后续节点
+    skip   ="condition"     条件成立或为空时返回, 不渲染子节点, 本节点保留
+    end    ="condition"     条件成立或为空时终止, 渲染完子节点后结束
     render ="...args"       带参数渲染子节点一次并返回
     each   ="expr,...args"  迭代 expr 值调用 this.render(...args, v, k) 并返回
                             expr值 可以是 Object 或者可迭代对象
@@ -123,8 +123,8 @@ function(a, b) {
     // 因为 text 指令已经返回, 现实中不会生成下面的代码
 
     return this.html('<b>html</b>');
-    if(c==0) return;
-    if(c==1) return this.end();
+    if(c==0) return; // skip
+    if(c==1) this.end();
     return this.render(c);
     return this.each([1,2,3],c);
 }
