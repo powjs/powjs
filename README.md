@@ -11,6 +11,7 @@ PowJS 模板引擎支持:
     渲染视图到 DOM Node
     文本节点求值语法 {{ expr }}, 剔除两端空白
     缺省执行函数形参为 (v,k)
+    支持继承形参, 推导形参
 
 ```
 模板----->PowJS<----->视图(导出,载入)
@@ -61,7 +62,6 @@ function PowJS(source, mixed /*, ...renderArgs*/) {
 提示:
 
     渲染是渲染子节点, 根实例总是把渲染节点作为子节点处理
-    编译器不能理解 render, each 对后续形参的影响, 这交由使用者负责
 
 ### 执行函数
 
@@ -75,6 +75,20 @@ function PowJS(source, mixed /*, ...renderArgs*/) {
     5. 如果使用了 render|each|html|text 指令后续指令被忽略
     6. 如果未使用 render|each 指令, 生成一个 this.render
     7. 遍历子孙节点重复步骤 1
+
+### 推导形参
+
+编译器不能识别复杂的 render, each 属性推导子节点形参, 可识别:
+
+```js
+let PARAMS_TEST = /^[$_a-zA-Z][$_a-zA-Z\d]*(\s*,\s*[$_a-zA-Z][$_a-zA-Z\d]*)*$/
+```
+
+另外 each 因为继承关系 v, k 还可能会产生形参重复的冲突, 约定推导行为:
+
+    使用了 render|each, 且属性值通过 PARAMS_TEST 测试
+    提取这些参数名作为推导形参, each 指令还是会添加形参 v, k
+    无重名冲突, 作为子节点的继承形参, 否则使用上层的继承形参
 
 ### 示例
 
@@ -131,6 +145,46 @@ function(a, b) {
 ```
 
 可见: 一组指令完全对应一个标准的 JavaScript 函数
+
+计算形参
+
+```html
+<ul each="v"><li>{{k}} {{v}}</li></ul>
+```
+
+输入
+
+```js
+[1,2]
+```
+
+输出
+
+```html
+<ul><li>0 1</li><li>1 2</li></ul>
+```
+
+冲突的例子, 假设输入参数类型为 Array, String
+
+```html
+<ul each="v,k"><li>{{v}}</li></ul>
+```
+
+多种解决方式
+
+```html
+<ul param="arr,str" each="arr,str">
+    <li>{{str}} {{k}} {{v}}</li>
+</ul>
+
+<ul each="v,k">
+    <li param="str,v,k">{{str}} {{k}} {{v}}</li>
+</ul>
+
+<ul let="str=k" each="v,str">
+    <li>{{str}} {{k}} {{v}}</li>
+</ul>
+```
 
 ### 模板实例
 

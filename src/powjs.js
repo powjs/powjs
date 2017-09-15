@@ -236,10 +236,12 @@ PowJS.prototype.slice = function(array, start, end) {
 	return slice.call(array, start, end)
 }
 
-const ending = 'text html render each'.split(' ');
+const ENDING = 'text html render each'.split(' '),
+	PARAMS_TEST = /^[$_a-zA-Z][$_a-zA-Z\d]*(\s*,\s*[$_a-zA-Z][$_a-zA-Z\d]*)*$/;
 
-function compile(view, node, prefix, discard, args) {
+function compile(view, node, prefix, discard, param) {
 	let body = '',
+		args = null,
 		render = '';
 
 	if (node.nodeType === TEXT_NODE) {
@@ -248,7 +250,7 @@ function compile(view, node, prefix, discard, args) {
 			view[TAG] = '#text';
 			view[ATTRS] = view[CHILDS] = null;
 			view[FN] = Function(
-				args,
+				param,
 				'this.create();' + body);
 		}
 		return;
@@ -257,7 +259,7 @@ function compile(view, node, prefix, discard, args) {
 	view[TAG] = node.nodeName;
 	view[ATTRS] = view[CHILDS] = null;
 	if (node.hasAttribute(prefix + 'param')) {
-		args = directives.param((node.getAttribute(prefix + 'param') || '').trim());
+		param = directives.param((node.getAttribute(prefix + 'param') || '').trim());
 	}
 
 	if (node.hasAttribute(prefix + 'if')) {
@@ -285,29 +287,48 @@ function compile(view, node, prefix, discard, args) {
 		if (render || name == 'if' || name == 'param') continue;
 
 		body += di(val);
-		if (ending.indexOf(name) + 1)
+		if (ENDING.indexOf(name) + 1) {
 			render = name;
+			if (render == 'html' || render == 'text') continue;
+			args = PARAMS_TEST.test(val) && val.split(/\s*,\s*/) || null;
+			if (args && name == 'each') {
+				args.push('v');
+				args.push('k');
+				args = args.slice(1);
+			}
+			args = args && isUnique(args) && args.join(',') || null;
+		}
 	}
 
 	if (!render) {
-		body += directives.render(args);
+		body += directives.render(param);
 	}
 
-	view[FN] = new Function(args, body);
+	view[FN] = new Function(param, body);
 
 	if (render == 'html' || render == 'text') return;
+
+	param = args || param;
 
 	for (let i = 0; i < node.childNodes.length; i++) {
 		if (node.childNodes[i].nodeType == COMMENT_NODE)
 			continue;
 
 		let v = [];
-		compile(v, node.childNodes[i], prefix, discard, args);
+		compile(v, node.childNodes[i], prefix, discard, param);
 		if (v.length) {
 			view[CHILDS] = view[CHILDS] || [];
 			view[CHILDS].push(v);
 		}
 	}
+}
+
+function isUnique(array) {
+	if (!array.length) return true;
+	array = array.slice(0).sort();
+	return ',' != array.slice(1).reduce(function(s, v) {
+			return (s === ',' || s === v) && ',' || v
+		}, array[0]);
 }
 
 function parseTemplate(txt) {
