@@ -44,78 +44,92 @@ function PowJS(source, mixed, ...data) {
 指令是标签的一个属性, 属性值是 *JavaScript 表达式或语句*.
 每个标签的所有指令生成一个被 render 函数调用的 *执行函数*,
 
-    param  ="...args"   声明执行函数的形参
-    if     ="condition" 条件成立节点才会被渲染
-    let    ="赋值语句"  设置局部变量
-    do     ="code"      直接执行代码
-    text   ="expr"      赋值当前节点的 textContent 值并返回
-    html   ="expr"      赋值当前节点的 innerHTML 值并返回
-    skip   ="condition" 条件成立或为空时返回, 不渲染子节点
-    end    ="condition" 条件成立或为空时终止, 不渲染后续节点
-    render ="...args"   带参数渲染子节点一次并返回
-    each   ="I,...args" 迭代 I 调用 this.render(...args, v, k) 并返回
-                        v, k 是 I 的迭代值和键名
-                        但是, 子节点执行函数形参由使用者负责
+    param  ="...args"       声明执行函数的形参
+    if     ="condition"     条件成立节点才会被渲染
+    let    ="赋值语句"      设置局部变量
+    do     ="code"          直接执行代码
+    text   ="expr"          赋值当前节点的 textContent 值并返回
+    html   ="expr"          赋值当前节点的 innerHTML 值并返回
+    skip   ="condition"     条件成立或为空时返回, 不渲染子节点
+    end    ="condition"     条件成立或为空时终止, 不渲染后续节点
+    render ="...args"       带参数渲染子节点一次并返回
+    each   ="expr,...args"  迭代 expr 值调用 this.render(...args, v, k) 并返回
+                            expr值 可以是 Object 或者可迭代对象
+                            v, k 是 expr 的迭代值和键名
 
-提示: 渲染是渲染子节点, 根实例总是把渲染节点作为子节点处理
+提示:
+
+    渲染是渲染子节点, 根实例总是把渲染节点作为子节点处理
+    编译器不能理解 render, each 对后续形参的影响, 这交由使用者负责
 
 ### 执行函数
 
-构建执行函数的次序
+构建执行函数的行为
 
     0. 构建开始, 传入形参为 v, k.
     1. 如果有 param 指令先确定形参, 否则使用继承的形参
-    2. 如果有 if 指令优先生成
-    3. 构建节点 this.create()
+    2. 如果有 if 指令生成 if(!(expr)) return;
+    3. 构建节点 生成      this.create()
     4. 按指令在属性中的次序生成执行代码
-    5. 如果未使用 render 和 each 指令, 生成一个 this.render
-    6. 遍历子孙节点重复步骤 1
-
-编译器不能理解 render, each 对后续形参的影响, 这交由使用者负责.
+    5. 如果使用了 render|each|html|text 指令后续指令被忽略
+    6. 如果未使用 render|each 指令, 生成一个 this.render
+    7. 遍历子孙节点重复步骤 1
 
 ### 示例
 
+缺省形参
+
 ```html
-<tag param='a, a+b'/>
+<tag/>
 ```
 
+生成
+
 ```js
- function(a, b) {
+function(v, k) {
+    this.create(); // 生成构建节点
+    return this.render(v, k); // 自动补充
+}
+```
+
+全部指令示意
+
+```html
+<tag
+    param='a, b'
+    if="a"
+    let="c=a*b"
+    do="console.log(b)"
+    text="c"
+    html="'<b>html</b>'"
+    skip="c==0"
+    end="c==1"
+    render="c"
+    each="[1,2,3],c"
+/>
+```
+
+生成
+
+```js
+function(a, b) {
+    if(!(a)) return;
     this.create();
-    return this.render(a, a+b); // 自动生成
- }
-```
-
-```html
-<tag if(a) param='a,b' render='a+b'/>
-```
-
-```js
- function(a, b) {
-    if(!a) return;
-    this.create();
-    return this.render(a+b);
- }
-```
-
-```html
- <tag param='a, b , array' let='c=a*2' code='a++' if='b'
-      skip='b.valid()' text='"ok"' html='b.html()'
-      each='array,b'
- />
-```
-
-```js
- function(a, b, array) {
-    if(!b) return;
     var c=a*2;
-    a++;
-    if(b.valid()) return;
-    return this.text("ok");    // 本例下面的代码不会被执行
-    return this.html(b.html());
-    return this.each(array, b);
- }
+    console.log(b);
+    return this.text(c);
+
+    // 因为 text 指令已经返回, 现实中不会生成下面的代码
+
+    return this.html('<b>html</b>');
+    if(c==0) return;
+    if(c==1) return this.end();
+    return this.render(c);
+    return this.each([1,2,3],c);
+}
 ```
+
+可见: 一组指令完全对应一个标准的 JavaScript 函数
 
 ### 模板实例
 
