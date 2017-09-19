@@ -40,6 +40,10 @@ directives.skip = function(exp) {
 	return !exp && 'return;' ||
 		'if(' + exp + ') return;';
 }
+directives.break = function(exp) {
+	return !exp && 'this.break();' ||
+		'if(' + exp + ') this.break();';
+}
 directives.end = function(exp) {
 	return !exp && 'this.end();' ||
 		'if(' + exp + ') this.end();';
@@ -161,12 +165,13 @@ function each($, views, args) {
 	let node = $.node,
 		flag = $.flag;
 	$.flag = 0;
-	views && views.some(function(view) {
-		if ($.flag) return true;
+	views && views.every(function(view) {
 		let pow = new PowJS(node, view, $);
 		pow.render.apply(pow, args);
+		return $.flag == 0;
 	});
-	$.flag = flag;
+	if ($.flag != -1)
+		$.flag = flag;
 	$.node = node;
 }
 
@@ -187,14 +192,12 @@ PowJS.prototype.each = function(iterator) {
 
 	if (toString.call(iterator) == '[object Object]') {
 		for (k in iterator) {
-			if (this.$.flag) break;
 			args[i] = iterator[k];
 			args[i + 1] = k;
 			each(this.$, views, args);
 		}
 	} else {
 		for (let v of iterator) {
-			if (this.$.flag) break;
 			args[i] = v;
 			args[i + 1] = k++;
 			each(this.$, views, args);
@@ -221,6 +224,10 @@ PowJS.prototype.html = function(html) {
 
 PowJS.prototype.end = function() {
 	this.$.flag = -1
+}
+
+PowJS.prototype.break = function() {
+	this.$.flag = 1
 }
 
 PowJS.prototype.attr = function(key, val) {
