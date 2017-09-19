@@ -280,12 +280,16 @@ function compile(view, node, prefix, discard, param) {
 			di = directives[
 				prefix && attr.name.startsWith(prefix) ?
 					attr.name.slice(prefix.length) : attr.name],
-
 			name = !di && attr.name || attr.name.slice(prefix.length),
 			val = attr.value.trim();
 
 		if (!di) {
-			if (discard.indexOf(name) == -1) {
+			if (discard.indexOf(name) != -1) {
+				continue;
+			}
+			if (val && val[0] == '{' && val[val.length - 1] == '}') {
+				body += 'this.attr("' + name + '",' + val.slice(1, -1) + ');';
+			} else {
 				view[ATTRS] = view[ATTRS] || Object.create(null);
 				view[ATTRS][name] = val;
 			}
