@@ -239,6 +239,10 @@ PowJS.prototype.attr = function(key, val) {
 	this.$.node.setAttribute(key, val);
 }
 
+PowJS.prototype.required = function() {
+	this.$.node.setAttribute('required', 'required');
+}
+
 PowJS.prototype.slice = function(array, start, end) {
 	return slice.call(array, start, end)
 }
@@ -287,7 +291,7 @@ function compile(view, node, prefix, discard, param) {
 			if (discard.indexOf(name) != -1) {
 				continue;
 			}
-			if (val && val[0] == '{' && val[val.length - 1] == '}') {
+			if (val && val[0] == '<' && val[val.length - 1] == '>') {
 				body += 'this.attr("' + name + '",' + val.slice(1, -1) + ');';
 			} else {
 				view[ATTRS] = view[ATTRS] || Object.create(null);

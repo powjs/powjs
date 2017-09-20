@@ -9,7 +9,7 @@ PowJS 模板引擎支持:
     编译一个祖标签的 HTML 源码模板
     导出视图, 数组形式的 JavaScript 源码
     渲染视图到 DOM Node
-    属性值表达式 name="{expr}"
+    属性值表达式 name="<expr>", 尖括作为标记符
     文本节表达式 {{expr}}
     自动剔除空白文本节点
     缺省执行函数形参为 (v,k)
@@ -201,6 +201,7 @@ function(a, b) {
 
 方法:
 
+    create()     内部方法, 构建当前节点
     render(...)  渲染方法, 渲染子节点一次
     each(...)    渲染方法, 迭代渲染子节点
     node()       指令可用, 返回 this.$.node
@@ -212,7 +213,7 @@ function(a, b) {
     export()     辅助方法, 导出视图为 JavaScript 源码
     childNodes() 辅助方法, 返回 this.parent.childNodes
     firstChild() 辅助方法, 返回 this.parent.firstChild
-    create()     内部方法, 构建当前节点
+    required()   辅助方法, 添加 required 属性
 
 重要: 节点 `由外向内构建`, `由内向外装配` 到父节点
 
