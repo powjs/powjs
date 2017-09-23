@@ -247,6 +247,16 @@ PowJS.prototype.slice = function(array, start, end) {
 	return slice.call(array, start, end)
 }
 
+let counter = 0;
+
+PowJS.prototype.inc = function() {
+	return ++counter;
+}
+
+PowJS.prototype.pow = function() {
+	return 'pow-' + counter;
+}
+
 const ENDING = 'text html render each'.split(' '),
 	PARAMS_TEST = /^[$_a-zA-Z][$_a-zA-Z\d]*(\s*,\s*[$_a-zA-Z][$_a-zA-Z\d]*)*$/;
 

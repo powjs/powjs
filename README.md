@@ -214,6 +214,9 @@ function(a, b) {
     childNodes() 辅助方法, 返回 this.parent.childNodes
     firstChild() 辅助方法, 返回 this.parent.firstChild
     required()   辅助方法, 添加 required 属性
+    inc()        辅助方法, 全局计数器 return ++counter;
+    pow()        辅助方法, 全局计数ID return 'pow-' + counter;
+
 
 重要: 节点 `由外向内构建`, `由内向外装配` 到父节点
 
