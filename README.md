@@ -15,6 +15,8 @@ PowJS 模板引擎支持:
     缺省执行函数形参为 (v,k)
     支持继承形参, 推导形参
 
+流程
+
 ```text
 模板----->PowJS<----->视图(导出,载入)
            |
@@ -22,14 +24,18 @@ PowJS 模板引擎支持:
           渲染
 ```
 
+PowJS module
+
 ```js
-function PowJS(source, mixed /*, ...renderArgs*/) {
+function (source, mixed /*, ...renderArgs*/) {
     /**
-     * 随参数的不同进行编译, 载入, 渲染.
+     * 参数
+     *
      * source:
-     *      string      要编译的 HTML 源码, 单个祖标签
-     *      Node        要编译的 DOM 节点
-     *      Array       要载入的已编译好的 PowJS 视图
+     *      undefined   返回 PowJS.prototype
+     *      string      编译 单个祖节点 HTML 源码
+     *      Node        编译 单个 DOM 节点
+     *      Array       载入 已编译的 PowJS 视图
      *      其它        抛出错误或渲染结果为空
      * mixed:
      *      Node        渲染并替换掉该节点
@@ -38,7 +44,7 @@ function PowJS(source, mixed /*, ...renderArgs*/) {
      * renderArgs:
      *      渲染数据
      *
-     * 返回: PowJS 实例
+     * 返回: PowJS.prototype 或 PowJS 实例
      */
 }
 ```

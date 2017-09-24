@@ -60,6 +60,7 @@ module.exports = function Pow(source, mixed /*,...renderArgs*/ ) {
 		prefix = '',
 		discard = [];
 
+	if (source === undefined) return PowJS.prototype;
 
 	if (typeof source === 'string')
 		source = firstChild(source);
