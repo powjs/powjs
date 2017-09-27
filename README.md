@@ -1,33 +1,43 @@
 # PowJS
 
-[PowJS][] 仍在开发中, 此文档提及的特性是已经确定的.
+PowJS 是一个编译型 JavaScript 模板引擎.
 
-PowJS 模板引擎支持:
-
-    采用原生 JavaScript 表达式
-    编译一个 DOM Node 模板
-    编译一个祖标签的 HTML 源码模板
-    导出视图, 数组形式的 JavaScript 源码
-    渲染视图到 DOM Node
-    属性值表达式 name="<expr>", 尖括作为标记符
-    文本节表达式 {{expr}}
-    自动剔除空白文本节点
-    缺省执行函数形参为 (v,k)
-    支持继承形参, 推导形参
+    采用原生 JavaScript 语法, 指令与 JavaScript 语句一一对应
+    单节点的 HTML 源码模板 或 DOM Node 模板
+    导出视图 JavaScript 源码格式
+    属性插值 name="somethin {{expr}}"
+    文本插值 {{expr}}, 并剔除文本节点两端空白
+    推导形参 缺省形参 (v,k)
 
 流程
 
 ```text
-模板----->PowJS<----->视图(导出,载入)
-           |
-           V
-          渲染
+string, Node ----> PowJS <----> View
+               |
+               V
+             render
 ```
 
-PowJS module
+DOM 节点与视图的转换关系:
 
 ```js
-function (source, mixed /*, ...renderArgs*/) {
+[
+    'TAG', {/*attribute*/},
+    function (v,k) {
+        /*directives*/
+    },
+    [
+        /*...childNodes*/
+    ]
+]
+```
+
+## 入门
+
+PowJS 是个 module, 入口函数定义为:
+
+```js
+function (source, option) {
     /**
      * 参数
      *
@@ -37,24 +47,137 @@ function (source, mixed /*, ...renderArgs*/) {
      *      Node        编译 单个 DOM 节点
      *      Array       载入 已编译的 PowJS 视图
      *      其它        抛出错误或渲染结果为空
-     * mixed:
-     *      Node        渲染并替换掉该节点
-     *      Object      上下文对象, 用于编译或渲染的参数
+     * option:
+     *      Object      编译选项或渲染的上下文对象
      *      其它        忽略
-     * renderArgs:
-     *      渲染数据
      *
      * 返回: PowJS.prototype 或 PowJS 实例
      */
 }
 ```
 
+NodeJS 环境下安装
+
+```sh
+yarn add powjs
+```
+
+浏览器环境下引入
+
+```html
+<script src="//unpkg.com/PowJS"></script>
+```
+
+以面包屑导航为例:
+
+```html
+<nav>
+    <div class="nav-wrapper">
+      <div class="col s12">
+        <a href="#!" class="breadcrumb">First</a>
+        <a href="#!" class="breadcrumb">Second</a>
+        <a href="#!" class="breadcrumb">Third</a>
+      </div>
+    </div>
+</nav>
+```
+
+PowJS 模板写法:
+
+```html
+<nav>
+    <div class="nav-wrapper">
+      <div class="col s12" each="v">
+        <a href="#!" class="breadcrumb">{{v}}</a>
+      </div>
+    </div>
+</nav>
+```
+
+使用 PowJS 编译该模板或载入编译好的视图, 并渲:
+
+```js
+let powjs = require('PowJS');
+let instance = powjs(htmlOrNodeOrView);
+instance.render(['First','Second','Third']);
+```
+
+事实上可以手工写出该模板的编译结果(视图):
+
+```js
+[
+    "NAV",     // 标签
+    null,null, // 该节点没有属性和指令函数
+    [          // 子节点
+        [
+            "DIV", {class:'nav-wrapper'},null,
+            [
+                [
+                    "DIV", {class:'col s12'},
+                    function(v,k) { // 缺省行参 v,k
+                        // each="v" 生成的指令函数
+                        this.create();
+                        return this.each(v);
+                    },
+                    [
+                        [
+                            "A",
+                            {href:'#!',class:'breadcrumb'},
+                            function(v,k) { // 推导形参, 该 v 是上一个 each 的值
+                                this.create();
+                                return this.text(v);
+                            },
+                            null
+                        ]
+                    ]
+                ]
+            ]
+        ]
+    ]
+]
+```
+
+### option
+
+该值包含编译选项和渲染上下文对象
+
+    prefix   编译选项, string   指令前缀, 缺省为 ''
+    discard  编译选项, [string] 被丢弃的属性名列表, 缺省为 []
+    flag     渲染标记, 内部维护
+    node     渲染节点, 内部维护
+    其它     用户自定义上下文
+
+## 实例
+
+属性:
+
+    view    编译生成的视图数组, 完整的节点树
+    parent  父节点(渲染子节点的容器)
+    $       源自 [option](#option)
+
+方法:
+
+    create()     内部方法, 构建当前节点
+    render(...)  渲染方法, 渲染子节点一次, 并返回 this
+    each(...)    渲染方法, 迭代渲染子节点, 并返回 this
+    node()       指令可用, 返回 this.$.node
+    end()        对应指令
+    text(expr)   对应指令, 设置或返回 this.node().textContent
+    html(expr)   对应指令, 设置或返回 this.node().innerHTML
+    attr(...)    辅助方法, 设置或返回 this.node() 属性值
+    slice(...)   辅助方法, 调用 Array.prototype.slice
+    export()     辅助方法, 导出视图为 JavaScript 源码
+    childNodes() 辅助方法, 返回 this.parent.childNodes
+    firstChild() 辅助方法, 返回 this.parent.firstChild
+    required()   辅助方法, 添加 required 属性
+    inc()        辅助方法, 全局计数器 return ++counter;
+    pow(inc)     辅助方法, 全局计数ID if(inc)this.inc();return 'pow-'+counter;
+
 ## 指令
 
-指令是标签的一个属性, 属性值是 *JavaScript 表达式或语句*.
-每个标签的所有指令生成一个被 render 函数调用的 *执行函数*,
+指令是标签中的属性, 值为 JavaScript 表达式或语句, 所有指令生成一个 *指令函数*.
 
-    param  ="...args"       声明执行函数的形参
+    param  ="...args"       声明指令函数的形参
     if     ="condition"     条件成立节点才会被渲染
     let    ="赋值语句"      设置局部变量
     do     ="code"          直接执行代码
@@ -70,34 +193,32 @@ function (source, mixed /*, ...renderArgs*/) {
 
 提示:
 
-    渲染是渲染子节点, 根实例总是把渲染节点作为子节点处理
+    render, each 总是渲染子节点, 根实例是个容器, 被渲染的节点是它的子节点
 
-### 执行函数
+### 指令函数
 
-构建执行函数的行为
+指令函数的构建过程:
 
-    0. 构建开始, 传入形参为 v, k.
-    1. 如果有 param 指令先确定形参, 否则使用继承的形参
+    0. 初始化 传入缺省形参 (v, k)
+    1. 如果有 param 指令先确定形参, 否则使用继承形参
     2. 如果有 if 指令生成 if(!(expr)) return;
-    3. 构建节点 生成      this.create()
+    3. 构建节点 this.create();
     4. 按指令在属性中的次序生成执行代码
-    5. 如果使用了 render|each|html|text 指令后续指令被忽略
-    6. 如果未使用 render|each 指令, 生成一个 this.render
-    7. 遍历子孙节点重复步骤 1
+    5. 如果使用了指令 render|each|html|text 后续指令被忽略
+    6. 如果未使用指令 render|each|html|text 生成 return this.render(...)
+    7. 遍历子节点重复步骤 1
 
 ### 推导形参
 
-编译器不能识别复杂的 render, each 属性推导子节点形参, 可识别:
+如果未使用 render|each 指令, 那么所有指令函数的行参上层的 param 定义的或 v, k.
+如果使用了 render|each 指令, 参数通过测试且无重名, 那么作为子节点的行参.
+each 指令还会添加形参 v, k.
+
+行参测试正则其实就是无运算的纯变量名:
 
 ```js
 let PARAMS_TEST = /^[$_a-zA-Z][$_a-zA-Z\d]*(\s*,\s*[$_a-zA-Z][$_a-zA-Z\d]*)*$/
 ```
-
-另外 each 因为继承关系 v, k 还可能会产生形参重复的冲突, 约定推导行为:
-
-    使用了 render|each, 且属性值通过 PARAMS_TEST 测试
-    提取这些参数名作为推导形参, each 指令还是会添加形参 v, k
-    无重名冲突, 作为子节点的继承形参, 否则使用上层的继承形参
 
 ### 示例
 
@@ -116,7 +237,7 @@ function(v, k) {
 }
 ```
 
-全部指令示意
+指令示意
 
 ```html
 <tag
@@ -124,6 +245,7 @@ function(v, k) {
     if="a"
     let="c=a*b"
     do="console.log(b)"
+    class="a-class {{a}}"
     text="c"
     html="'<b>html</b>'"
     skip="c==0"
@@ -142,6 +264,7 @@ function(a, b) {
     this.create();
     var c=a*2;
     console.log(b);
+    this.attr('class', "a-class " + (a)); // 属性插值
     return this.text(c);
 
     // 因为 text 指令已经返回, 现实中不会生成下面的代码
@@ -197,57 +320,11 @@ function(a, b) {
 </ul>
 ```
 
-### 模板实例
-
-属性:
-
-    view    编译生成的视图数组, 完整的节点树
-    parent  父节点(渲染子节点的容器)
-    $       参见 [Context](#Context)
-
-方法:
-
-    create()     内部方法, 构建当前节点
-    render(...)  渲染方法, 渲染子节点一次
-    each(...)    渲染方法, 迭代渲染子节点
-    node()       指令可用, 返回 this.$.node
-    end()        对应指令
-    text(expr)   对应指令, 设置或返回 this.node().textContent
-    html(expr)   对应指令, 设置或返回 this.node().innerHTML
-    attr(...)    辅助方法, 设置或返回 this.node() 属性值
-    slice(...)   辅助方法, 调用 Array.prototype.slice
-    export()     辅助方法, 导出视图为 JavaScript 源码
-    childNodes() 辅助方法, 返回 this.parent.childNodes
-    firstChild() 辅助方法, 返回 this.parent.firstChild
-    required()   辅助方法, 添加 required 属性
-    inc()        辅助方法, 全局计数器 return ++counter;
-    pow()        辅助方法, 全局计数ID return 'pow-' + counter;
-
-
-重要: 节点 `由外向内构建`, `由内向外装配` 到父节点
-
-### Context
-
-this.$ 是渲染时的上下文对象
-
-    prefix   编译选项, string   指令前缀, 缺省为 ''
-    discard  编译选项, [string] 被丢弃的属性名列表, 缺省为 []
-    flag     渲染标记, 内部维护, -1 表示被 end() 结束
-    node     渲染对象, 当前节点对象
-    其它     用户自定义上下文值
-
 ### 文本节点
 
-文本节点求值语法 {{ expr }}, 并剔除两端空白, 空白节点被忽略.
+文本节点剔除两端空白, 空白节点被忽略.
 
 当整个模板是一个文本节点时, 默认的形参自然生效:
-
-```js
-function(v,k){
-    this.create();
-    this.text(/*文本节点求值表达式*/);
-}
-```
 
 ## License
 
