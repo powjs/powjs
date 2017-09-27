@@ -65,7 +65,7 @@ yarn add powjs
 浏览器环境下引入
 
 ```html
-<script src="//unpkg.com/PowJS"></script>
+<script src="//unpkg.com/powjs"></script>
 ```
 
 以面包屑导航为例:
