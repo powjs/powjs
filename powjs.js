@@ -141,6 +141,7 @@
 
 	PowJS.prototype.create = function() {
 		let tag = this.view[TAG],
+			plugins = this.$.plugins,
 			attrs = this.view[ATTRS];
 
 		this.$.node = this.parent.appendChild(
@@ -149,8 +150,13 @@
 			document.createElement(tag)
 		);
 
-		for (let key in attrs)
-			this.$.node.setAttribute(key, attrs[key]);
+		for (let key in attrs){
+			if(plugins && plugins[key] && plugins[key].call) {
+				plugins[key](this.$.node, attrs[key], key, this);
+			} else {
+				this.$.node.setAttribute(key, attrs[key]);
+			}
+		}
 	}
 
 	PowJS.prototype.render = function() {
@@ -233,6 +239,10 @@
 			this.$.node.innerHTML = html + '';
 	}
 
+	PowJS.prototype.outerHTML = function() {
+		return this.parent.innerHTML;
+	}
+
 	PowJS.prototype.end = function() {
 		this.$.flag = -1
 	}
@@ -266,7 +276,7 @@
 
 	PowJS.prototype.pow = function(inc) {
 		if (inc) counter++;
-		return 'pow-' + counter;
+		return '-pow-' + counter;
 	}
 
 	const ENDING = 'text html render each'.split(' '),

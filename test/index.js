@@ -123,6 +123,13 @@ let cases = [
 		src: '<p><b if="v" end class="{{v}}"><i>{{k}}</i></b><b>never</b></p>',
 		args: ['1', '2'],
 		html: '<p><b class="1"><i>2</i></b></p>'
+	}, {
+		opts:{plugins:{'src':function(node,val) {
+				node.setAttribute('data-src', val);
+			}}},
+		src: '<img src="1.jpg">',
+		args: [],
+		html: '<img data-src="1.jpg">'
 	}
 ];
 
@@ -136,7 +143,7 @@ test("PowJS", function(assert) {
 		} else {
 			pow.render(...t.args);
 		}
-		assert.equal(pow.parent.innerHTML, t.html, i + ': ' + t.src);
+		assert.equal(pow.outerHTML(), t.html, i + ': ' + t.src);
 	}
 	assert.end();
 });

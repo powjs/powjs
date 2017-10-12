@@ -145,6 +145,7 @@ instance.render(['First','Second','Third']);
     discard  编译选项, [string] 被丢弃的属性名列表, 缺省为 []
     flag     渲染标记, 内部维护
     node     渲染节点, 内部维护
+    plugins  渲染插件, 属性控制
     其它     用户自定义上下文
 
 ## 实例
@@ -171,7 +172,8 @@ instance.render(['First','Second','Third']);
     firstChild() 辅助方法, 返回 this.parent.firstChild
     required()   辅助方法, 添加 required 属性
     inc()        辅助方法, 全局计数器 return ++counter;
-    pow(inc)     辅助方法, 全局计数ID if(inc)this.inc();return 'pow-'+counter;
+    pow(inc)     辅助方法, 全局计数ID if(inc)this.inc();return '-pow-'+counter;
+    outerHTML()  辅助方法, 返回 this.parent.outerHTML ;
 
 ## 指令
 
@@ -218,6 +220,38 @@ each 指令还会添加形参 v, k.
 
 ```js
 let PARAMS_TEST = /^[$_a-zA-Z][$_a-zA-Z\d]*(\s*,\s*[$_a-zA-Z][$_a-zA-Z\d]*)*$/
+```
+
+### plugins
+
+插件是一个函数, 在渲染执行, 用于控制当前节点的属性. 定义:
+
+```js
+/**
+ * 插件原型
+ * @param  {Element} node 当前节点
+ * @param  {string}  val  属性值
+ * @param  {string}  key  属性名
+ * @param  {PowJS}   pow  当前的 PowJS 实例
+ */
+function plugin(node, val, key, pow) {
+    //...
+}
+```
+
+很简单, 示例:
+
+```js
+let pow = require('powjs');
+
+pow('<img src="1.jpg">', {
+    plugins:{
+        'src': function(node, val) {
+            node.setAttribute('data-src', val);
+        }
+    }
+}).render().outerHTML();
+// output: <img data-src="1.jpg">
 ```
 
 ### 示例
