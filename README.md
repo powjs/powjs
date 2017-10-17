@@ -1,5 +1,10 @@
 # PowJS
 
+[![badge](https://img.shields.io/badge/Pow-JavaScript-green.svg?style=flat-square)](https://github.com/powjs/powjs)
+[![npm](https://img.shields.io/npm/l/powjs.svg?style=flat-square)](https://www.npmjs.org/package/powjs)
+[![npm](https://img.shields.io/npm/dm/powjs.svg?style=flat-square)](https://www.npmjs.org/package/powjs)
+[![npm](https://img.shields.io/npm/dt/powjs.svg?style=flat-square)](https://www.npmjs.org/package/powjs)
+
 PowJS 是一个编译型 Real-DOM 模板引擎.
 
     工作在浏览器环境, 直接在 DOM Tree 上编译, 渲染. DOM Tree 就是模板.
@@ -32,6 +37,8 @@ DOM 节点与视图的转换关系:
     ]
 ]
 ```
+
+绕过文档直视 [Demo](https://codepen.io/achun/project/full/XjEvaw)
 
 ## 入门
 
@@ -360,6 +367,14 @@ function(a, b) {
 文本节点剔除两端空白, 空白节点被忽略.
 
 当整个模板是一个文本节点时, 默认的形参自然生效:
+
+## 赞助
+
+赞助以帮助 PowJS 持续更新
+
+![通过支付宝赞助](https://user-images.githubusercontent.com/489285/31326203-9b0c95c0-ac8a-11e7-9161-b2d8f1cc00e8.png)
+![通过微信赞助](https://user-images.githubusercontent.com/489285/31326223-c62b133a-ac8a-11e7-9af5-ff5465872280.png)
+[![通过 Paypal 赞助](https://user-images.githubusercontent.com/489285/31326166-63e63682-ac8a-11e7-829a-0f75875ac88a.png)](https://www.paypal.me/HengChunYU/5)
 
 ## License
 
