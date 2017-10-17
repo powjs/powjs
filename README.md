@@ -1,7 +1,8 @@
 # PowJS
 
-PowJS 是一个编译型 JavaScript 模板引擎.
+PowJS 是一个编译型 Real-DOM 模板引擎.
 
+    工作在浏览器环境, 直接在 DOM Tree 上编译, 渲染. DOM Tree 就是模板.
     采用原生 JavaScript 语法, 指令与 JavaScript 语句一一对应
     单节点的 HTML 源码模板 或 DOM Node 模板
     导出视图 JavaScript 源码格式
