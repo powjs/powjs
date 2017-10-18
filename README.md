@@ -15,6 +15,8 @@ PowJS 是一个编译型 Real-DOM 模板引擎.
     文本插值 {{expr}}, 并剔除文本节点两端空白
     推导形参 缺省形参 (v,k)
 
+绕过文档直视 [Demo](https://codepen.io/achun/project/full/XjEvaw)
+
 流程
 
 ```text
@@ -37,8 +39,6 @@ DOM 节点与视图的转换关系:
     ]
 ]
 ```
-
-绕过文档直视 [Demo](https://codepen.io/achun/project/full/XjEvaw)
 
 ## 入门
 
@@ -96,6 +96,7 @@ PowJS 模板写法:
 <nav>
     <div class="nav-wrapper">
       <div class="col s12" each="v">
+        <!-- 下面的 v 是推导形参, 是上面 v 的遍历元素 -->
         <a href="#!" class="breadcrumb">{{v}}</a>
       </div>
     </div>
@@ -105,7 +106,7 @@ PowJS 模板写法:
 使用 PowJS 编译该模板或载入编译好的视图, 并渲:
 
 ```js
-let powjs = require('PowJS');
+let powjs = require('powjs');
 let instance = powjs(htmlOrNodeOrView);
 instance.render(['First','Second','Third']);
 ```
@@ -122,16 +123,15 @@ instance.render(['First','Second','Third']);
             [
                 [
                     "DIV", {class:'col s12'},
-                    function(v,k) { // 缺省行参 v,k
-                        // each="v" 生成的指令函数
-                        this.create();
-                        return this.each(v);
+                    function(v, k) {         // 缺省推导形参
+                        this.create();       // 自动生成的
+                        return this.each(v); // each="v"
                     },
                     [
                         [
                             "A",
                             {href:'#!',class:'breadcrumb'},
-                            function(v,k) { // 推导形参, 该 v 是上一个 each 的值
+                            function(v, k) {
                                 this.create();
                                 return this.text(v);
                             },
@@ -220,11 +220,11 @@ instance.render(['First','Second','Third']);
 
 ### 推导形参
 
-如果未使用 render|each 指令, 那么所有指令函数的行参上层的 param 定义的或 v, k.
-如果使用了 render|each 指令, 参数通过测试且无重名, 那么作为子节点的行参.
+如果未使用 render|each 指令, 那么所有指令函数的形参上层的 param 定义的或 v, k.
+如果使用了 render|each 指令, 参数通过测试且无重名, 那么作为子节点的形参.
 each 指令还会添加形参 v, k.
 
-行参测试正则其实就是无运算的纯变量名:
+形参测试正则其实就是无运算的纯变量名:
 
 ```js
 let PARAMS_TEST = /^[$_a-zA-Z][$_a-zA-Z\d]*(\s*,\s*[$_a-zA-Z][$_a-zA-Z\d]*)*$/
