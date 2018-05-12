@@ -417,8 +417,8 @@
       if (!di) {
 
         if (val.indexOf('{{') !== -1)
-          body += !end && 'this.attr("' + name + '",' +
-            (val && parseTemplate(val) || '\'\'') + ');' || '';
+          body += !end ? 'this.attr("' + name + '",' +
+            parseTemplate(val) + ');' : '';
         else {
           view[ATTRS] = view[ATTRS] || Object.create(null);
           view[ATTRS][name] = val;
@@ -432,6 +432,9 @@
         param = val;
         continue;
       }
+
+      if (val.indexOf('{{') !== -1)
+        val = parseTemplate(val);
 
       if (name === 'if') {
         if (!val) throw new Error(

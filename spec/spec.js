@@ -26,6 +26,14 @@ function real(selector) {
 
 let cases = [
   {
+    src: '<b text="User: {{v}}"></b>',
+    args: ['<i>Tom</i>'],
+    html: '<b>User: &lt;i&gt;Tom&lt;/i&gt;</b>',
+  }, {
+    src: '<b html="User: {{v}}"></b>',
+    args: ['<i>Tom</i>'],
+    html: '<b>User: <i>Tom</i></b>',
+  }, {
     src: '<b>{{v}}</b>',
     args: [1],
     html: '<b>1</b>',
