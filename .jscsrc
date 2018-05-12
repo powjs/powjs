@@ -1,4 +1,8 @@
 {
+  "preset": "google",
+  "fix": true,
   "validateLineBreaks": "LF",
-  "validateIndentation": "\t",
+  "validateIndentation": 2,
+  "validateQuoteMarks": "'",
+  "requireDotNotation": false,
 }

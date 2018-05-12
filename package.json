@@ -20,15 +20,20 @@
   ],
   "dependencies": {},
   "devDependencies": {
-    "jsdom": "^11.2.0",
-    "prettier": "^1.7.0",
-    "tap-spec": "^4.1.1",
-    "tape": "^4.8.0"
+    "jsdom": "^11.10.0",
+    "karma": "^2.0.2",
+    "karma-chrome-launcher": "^2.2.0",
+    "karma-firefox-launcher": "^1.1.0",
+    "karma-jasmine": "^1.1.2",
+    "karma-jasmine-html-reporter": "^1.1.0",
+    "karma-requirejs": "^1.1.0",
+    "karma-safari-launcher": "^1.0.0",
+    "prettier": "^1.12.1"
   },
   "engines": {
     "node": ">=0.10.0"
   },
   "scripts": {
-    "test": "node ./test/index.js | tap-spec"
+    "test": "jasmine"
   }
 }
