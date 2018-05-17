@@ -20,7 +20,7 @@
     slice = Array.prototype.slice,
     toString = Object.prototype.toString,
     RENDERINFERENCE = /(([a-z]\w*),|([a-z]\w*)$)/ig,
-    EACHINFERENCE = /(key-|val-)?(([a-z]\w*),|([a-z]\w*)$)/ig,
+    EACHINFERENCE = /(key-|val-|len-|num-)?(([a-z]\w*),|([a-z]\w*)$)/ig,
     TMPL = /{{|}}/m;
 
   let counter = 0, directives = Object.create(null);
@@ -41,8 +41,7 @@
       return `return ${exp};`;
     }
 
-    if (exp.endsWith('||'))
-      return `return ${exp} '${tag}';`;
+    if (exp.endsWith(';')) return `return ${exp}`;
     return `return ${exp} && '${tag}';`;
   };
 
@@ -139,16 +138,16 @@
       .replace('\n/*``*/', '');
   }
 
-  function toScript(sum, view) {
+  function toScript(sum, view, i) {
     let len = view.length;
 
-    return sum + '[' +
+    return sum + (i && ',[' || '[') +
       (typeof view[0] === 'string' && `'${view[0]}'` || funcScript(view[0])) +
       (len > 1 && ',' + JSON.stringify(view[1]) || '') +
       (len > 2 && ',' + funcScript(view[2]) || '') +
       (len > 3 && view[3].reduce(toScript, ',[') + ']' || '') +
-      (len > 4 && ',' + JSON.stringify(view[4]) || '' ) +
-    '],';
+      (len > 4 && ',' + JSON.stringify(view[4]) || '') +
+    ']';
   }
 
   function assert(node) {
@@ -160,7 +159,7 @@
   }
 
   function find(name, childs) {
-    if(childs) for (let i = 0; i < childs.length; i++) {
+    if (childs) for (let i = 0; i < childs.length; i++) {
       let
         view = childs[i],
         got = view[name] || view[FUNC] === name && view || find(name, view[CHILDS]);
@@ -202,10 +201,11 @@
       if (typeof tag === 'function') {
         tag = tag.apply(this, args);
         if (typeof tag !== 'string') return this;
-        if (tag[0] === '@') return this.call(tag.substring(1), ...args);
       }
 
       if (!tag) return this;
+
+      if (tag[0] === '@') return this.call(tag.substring(1), ...args);
 
       if (tag[0] === '#') {
         this.node = this.parent.appendChild(document.createTextNode(tag.slice(1)));
@@ -262,17 +262,22 @@
       this.flag = 0;
       args.push(null, null);
       if (isObject(x)) {
-        for (let k in x) {
-          args[i] = x[k];
-          args[i + 1] = k;
+        x = Object.entries(x);
+        args.push(x.length, null);
+        x.some((v, k) => {
+          args[i] = v[1];
+          args[i + 1] = v[0];
+          args[i + 3] = k + 1;
           this.render(...args);
-          if (this.flag & END) break;
-        }
+          return this.flag & END && true;
+        });
       } else if (typeof x === 'object') {
         if (!Array.isArray(x)) x = slice.call(x);
-        x.some((v,k) => {
+        args.push(x.length);
+        x.some((v, k) => {
           args[i] = x[k];
           args[i + 1] = k;
+          args[i + 3] = k + 1;
           this.render(...args);
           return this.flag & END && true;
         });
@@ -337,12 +342,12 @@
 
     exports(target) {
       target = target || 'module.exports';
-      return target + this.toScript() + ';';
+      return target + ' = ' + this.toScript() + ';';
     }
 
     toScript() {
       return this.view.reduce((sum, view)=> {
-        return toScript(sum, view);
+        return toScript(sum, view, 0);
       }, '[') + ']';
     }
 
@@ -442,6 +447,8 @@
 
       if (body.indexOf('{{') === -1)
         view.push('#' + body);
+      else if (body.startsWith('{{@') && body.endsWith('}}'))
+        view.push(body.slice(2, -2));
       else
         view.push('#', 0, new Function(  // jshint ignore:line
           param,
@@ -491,7 +498,18 @@
         continue;
       }
 
-      if (render || end) continue;
+      if (['break', 'end'].indexOf(name) >= 0) {
+        body += di(val);
+        end = end || !val;
+        continue;
+      }
+
+      if ('func' === name) {
+        view[FUNC] = di(val);
+        continue;
+      }
+
+      if (render) continue;
 
       if ('render' === name) {
         if (val[0] === ':')
@@ -502,12 +520,6 @@
         render = name;
       }else if (['text', 'html'].indexOf(name) >= 0)
         render = name;
-      else if (!val || 'end' === name)
-        end = true;
-      else if ('func' === name) {
-        view[FUNC] = di(val);
-        continue;
-      }
 
       body += di(val);
     }
@@ -551,7 +563,7 @@
   function eachInference(parameter) {
     // result [parameter-clean, parameter-next]
     let
-      next = ['','v','k'],
+      next = ['','v','k','$l','$n'],
       force = parameter[0] === ':',
       clean = force ? parameter.substring(1) : parameter,
       params = parameter.match(EACHINFERENCE);
@@ -570,6 +582,12 @@
         next[s[0] === 'k' && 2 || 1] = c.slice(4);
         return sum;
       }
+      if (s.startsWith('len-') || s.startsWith('num-')) {
+        clean = clean.replace(s, '');
+        next[0] = ',';
+        next[s[0] === 'l' && 3 || 4] = c.slice(4);
+        return sum;
+      }
       return !sum && c || sum + ',' + c;
     }, '');
 
@@ -577,7 +595,7 @@
       throw new Error('Illegal expression on each');
     if (!next[0] && !force) return [clean, ''];
 
-    if(params)
+    if (params)
       next[0] = params;
     else
       next.shift();

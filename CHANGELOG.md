@@ -2,6 +2,13 @@
 
 该项目遵循 [Semantic Versioning](http://semver.org/).
 
+## 2.2.0
+
+- 修复 `exports` 导出 BUG
+- 优化 `toString` 输出
+- 变更 `if` 指令取消尾部 `||` 规则, 优化为尾部 `;` 判断
+- 增加 `each` 附加参数以及形参推导
+
 ## 2.1.1
 
 - 修复 `each` 形参推导 BUG

@@ -178,6 +178,8 @@ instance.toScript();
 ]
 ```
 
+更多信息请至 [Wiki][].
+
 ## 指令
 
 指令在节点中是属性, 值为 ECMAScript 表达式或语句, 最终拼接生成视图函数.
@@ -191,9 +193,9 @@ instance.toScript();
     html   ="expr"            设置HTML: this.html(expr);
     end                       保留本节点, 终止渲染: return this.end();
     end    ="cond"            保留本节点, 终止条件: if(cond) return this.end();
-    skip                      不渲染子层: this.skip();
+    skip                      跳过子层渲染: this.skip();
     skip   ="cond"            子层渲染条件: if(cond) this.skip();
-    break                     不渲染兄弟层: this.break();
+    break                     跳过兄弟层渲染: this.break();
     break  ="cond"            兄弟层渲染条件: if(cond) this.break();
     render ="args,argsN"      渲染子层: this.render(args,argsN);
     each   ="expr,args,argsN" 遍历渲染子层: this.each(expr,args,argsN);
@@ -216,12 +218,14 @@ instance.toScript();
 指令 `func` 给生成的视图函数命名, 以便在视图中调用.
 
 ```html
-<b func="name"><i if="something && '@name' ||"></i>></b>
-<b func="name"><i do="if(something) return this.call('name',arg)"></i>></b>
+<b func="name"><i>{{@name}}</i></b>
+<b func="name"><i if="something && '@name';"></i></b>
+<b func="name"><i do="if(something) return this.call('name',arg)"></i></b>
 ```
 
 如上所示, 调用子视图函数有两种方法:
 
+- 在 文本节点中调用, 文本表达式有 `{{@`, `}}` 包裹
 - 在 `if` 中返回 `@` 开头视图名字符串, 此时未创建当前节点, 行为是转让节点
 - 用 `this.call` 传递视图名和其它实参, 此时已创建当前节点, 行为是创建子节点
 
@@ -230,7 +234,7 @@ instance.toScript();
 例:
 
 ```html
-<i if="'@name'||">never</i><span func="name">yes</span>
+{{@name}}<span func="name">yes</span>
 <!-- render().html() output: -->
 <span>yes</span><span>yes</span>
 ```
@@ -238,7 +242,15 @@ instance.toScript();
 例:
 
 ```html
-<b><i if="'@name'||">never</i></b><span func="name">yes</span>
+<i if="'@name';">never</i><span func="name">yes</span>
+<!-- render().html() output: -->
+<span>yes</span><span>yes</span>
+```
+
+例:
+
+```html
+<b><i if="'@name';">never</i></b><span func="name">yes</span>
 <!-- render().html() output: -->
 <b><span>yes</span></b><span>yes</span>
 ```
@@ -266,18 +278,26 @@ instance.toScript();
 
 ### each-render
 
-指令 `render` 渲染子层, 并传递参数,
-`each` 遍历第一个参数, 调用 `render` 传递参数并附加 值,键(序号).
+指令 `render` 渲染子层, 指令 `each` 遍历第一个参数, 调用 `render` 并附加参数.
 
 支持对子层形参推导: 满足任何一个条件就进行形参推导, 否则子层继续使用继承形参.
 
 - 在值(参数)中以 `:` 开头, 从后续的实参中提取子层的形参名 `param`
-- 在 `each` 中使用 `val-`, `key-` 自定义 值,键(序号) 的形参名, 否则使用 `v,k`
+- 在 `each` 中使用 `xxx-` 自定义形参名, 否则使用缺省参数名
+
+指令 `each` 总是以固定次序将下列四个参数添加到用户参数之后.
+
+1. 遍历的值 可使用 `val-` 自定义该形参名, 缺省 `v`
+1. 遍历的键 可使用 `key-` 自定义该形参名, 缺省 `k`
+1. 长度总数 可使用 `len-` 自定义该形参名, 缺省 `$l`
+1. 本次序号 从 1 开始, 可使用 `num-` 自定义该形参名, 缺省 `$n`
 
 行为:
 
-- 形参推导不进行语法分析, 只是简单的字符串处理
-- `each` 得到的值,键(序号)形参名总是被后置
+- 形参推导仅对子层有效
+- 不进行语法分析, 只是简单的字符串处理
+- `each` 附加的参数总是添加到用户参数之后, 且次序固定
+- 子层总是可以使用 `param` 重新定义形参名
 
 例: render 参数未以 `:` 开头, 不进行形参推导
 
@@ -295,19 +315,19 @@ instance.toScript();
 <ul><li>21</li></ul>
 ```
 
-例: each
+例: each 总是附加参数在最后
 
 ```html
 <dl param="array, id" each=":array,id">
-  <dd>{{id}}:{{item}}</dd> <!-- function(id,item,v,k) --->
+  <dd>{{id}}:{{item}}</dd> <!-- function(id,item,v,k,$l,$n) --->
 </dl>
 
 <dl param="array, id" each="array,id,val-item">
-  <dd>{{id}}:{{item}}</dd> <!-- function(id,item) --->
+  <dd>{{id}}:{{item}}</dd> <!-- function(id,item,k,$l,$n) --->
 </dl>
 
-<dl param="array, id" each=":array,id,val-item">
-  <dd>{{id}}:{{item}}</dd> <!-- function(id,item) --->
+<dl param="array, id" each=":array,id,val-item,num-row">
+  <dd>{{id}}:{{item}}</dd> <!-- function(id,item,key,$l,row) --->
 </dl>
 ```
 
@@ -349,10 +369,10 @@ function splitArguments(expOfRenderOrEach) {
 ]
 ```
 
-例: 动态改变标签名, 以 `||` 结尾
+例: 以 `;` 结尾不添加缺省标签
 
 ```html
-<ul param="data" if="Array.isArray(data) && 'OL' ||"></ul>
+<ul param="data" if="Array.isArray(data) && 'OL'||'DIV';"></ul>
 ```
 
 生成:
@@ -361,7 +381,7 @@ function splitArguments(expOfRenderOrEach) {
 [
   [
     function(data) {
-      return (Array.isArray(data) && "OL") || "UL";
+      return (Array.isArray(data) && "OL") || "DIV";
     },
   ]
 ]
@@ -394,8 +414,7 @@ directives.if = function(exp, tag) {
     return `return ${exp};`;
   }
 
-  if(exp.endsWith('||'))
-    return `return ${exp} '${tag}';`;
+  if(exp.endsWith(';')) return `return ${exp}`;
   return `return ${exp} && '${tag}';`;
 };
 ```
@@ -413,6 +432,11 @@ directives.if = function(exp, tag) {
 - `#` 开头   创建 `Text` 节点, 且 '#' 之后的字符串作为节点的内容
 - `@` 开头   调用命名视图, 且传递继承的实参
 - 其它字符串 创建 `Element` 节点
+
+### skip-break
+
+在渲染函数中 `render` 渲染子层是本层的一个步骤, `skip` 跳过本层就是跳过子层渲染.
+而子层渲染是在一个循环中, `break` 跳出循环就是跳过兄弟层渲染.
 
 ### do
 
@@ -589,3 +613,4 @@ pow(`<img src="1.jpg" do="this.attr('src','2.jpg')">`, {
 MIT License <https://github.com/powjs/powjs/blob/master/LICENSE>
 
 [PowJS]: https://github.com/powjs/powjs
+[Wiki]: https://github.com/powjs/powjs/wiki

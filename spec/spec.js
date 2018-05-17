@@ -24,11 +24,11 @@ function real(selector) {
   return document.body.querySelectorAll(selector);
 }
 
-function sandbox () {
+function sandbox() {
   return PowJS('<div class="sandbox"></div>').render();
 }
 
-function realbox () {
+function realbox() {
   let pow = PowJS('<div class="realbox"></div>');
   pow.node = document.body;
   return pow.render();
@@ -177,7 +177,7 @@ let cases = [
     args: [1,2],
     html: '<b>1</b><b>0</b><b>2</b><b>1</b>'
   }, {
-    src: `<p><a if="'b'||"> a </a></p>`,
+    src: `<p><a if="'b';"> a </a></p>`,
     args: [],
     html: '<p><b>a</b></p>'
   }, {
@@ -193,11 +193,11 @@ let cases = [
   }, {
     src: '<ul param="data" if="Array.isArray(data)"></ul>',
   }, {
-    src: `<ul param="data" if="Array.isArray(data) && 'OL' ||"></ul>`,
+    src: `<ul param="data" if="Array.isArray(data) && 'OL'||'UL';"></ul>`,
   }, {
     src: `<ul param="data" if="Array.isArray(data) && '---'"></ul>`,
   }, {
-    src: `<p><a if="'b'||"> a </a></p>`,
+    src: `<p><a if="'b';"> a </a></p>`,
     args: [],
     html: '<p><b>a</b></p>'
   }, {
@@ -240,13 +240,13 @@ let cases = [
     args: [[1, 2],3],
     html: '<b>3,0,13,1,2</b>'
   }, {
-    src: '<b param="p,b" each="p.children,val-child">{{child}},{{k}}</b>',
-    args: [{children:[1,2]},3],
-    html: '<b>1,02,1</b>'
+    src: '<b param="p,b" each="p.children,val-child">{{child}},{{k}},{{$l}},{{$n}}{{$l!==$n&&"/"||""}}</b>',
+    args: [{children: [1,2]},3],
+    html: '<b>1,0,2,1/2,1,2,2</b>'
   }, {
-    src: '<b param="p,b" each="p.children,key-key,val-child">{{child}},{{key}}</b>',
-    args: [{children:[1,2]},3],
-    html: '<b>1,02,1</b>'
+    src: '<b param="p,b" each="p.children,key-key,val-child,num-row">{{child}},{{key}},{{$l}},{{row}}{{$l!==row&&"/"||""}}</b>',
+    args: [{children: [1,2]},3],
+    html: '<b>1,0,2,1/2,1,2,2</b>'
   }
 ];
 
@@ -270,8 +270,8 @@ describe('render', function() {
   });
 });
 
-describe('DOM Manipulation', function () {
-  it('appendTo, renew', function () {
+describe('DOM Manipulation', function() {
+  it('appendTo, renew', function() {
     let pow = sandbox();
     pow.appendTo(document.body);
     expect(pow.childNodes().length).toBe(0);
@@ -283,7 +283,7 @@ describe('DOM Manipulation', function () {
     expect(real('.sandbox').length).toBe(2);
   });
 
-  it('Expect TypeError', function () {
+  it('Expect TypeError', function() {
     let pow = sandbox();
     expect(()=> pow.render().renew()).toThrowError(/Manipulation/);
     expect(()=> pow.render().renew(real('.sandbox'))).toThrowError(/Manipulation/);
@@ -291,10 +291,18 @@ describe('DOM Manipulation', function () {
 });
 
 describe('Transfer', function() {
+  it('text tranfer', function() {
+    let
+      pow = PowJS(`
+        {{@name}}<span func="name">yes</span>
+      `),
+    html = pow.render().html();
+    expect(html).toBe('<span>yes</span><span>yes</span>');
+  });
   it('top transfer', function() {
     let
       pow = PowJS(`
-      <i if="'@name'||">never</i>
+      <i if="'@name';">never</i>
       <span func="name">yes</span>
     `),
     html = pow.render().html();
@@ -304,7 +312,7 @@ describe('Transfer', function() {
   it('sub transfer', function() {
     let
       pow = PowJS(`
-      <b><i if="'@name'||">never</i></b>
+      <b><i if="'@name';">never</i></b>
       <span func="name">yes</span>
     `),
     html = pow.render().html();
@@ -331,5 +339,59 @@ describe('call', function() {
     `),
     html = pow.render().html();
     expect(html).toBe('<b><i><span>yes</span></i></b><span>yes</span>');
+  });
+});
+
+describe('Case-Folders', function() {
+  let tmpl = `
+   <ul param="model, open" render="open, model">
+    <li func="folders" param="open, model, idx, len, num">
+      <div class="{{open&&'bold'||''}}">
+        {{model.name}}<span if="model.children">[-]</span>
+      </div>
+      <ul if="model.children"
+        each="model.children, open"
+      >
+        {{@folders}}
+        <li if="len===num" class="add">+</li>
+      </ul>
+    </li>
+  </ul>
+  `,
+  data = {
+    name: 'My Tree',
+    children: [
+      {name: 'hello'},
+      {name: 'wat'},
+      {
+        name: 'child folder1',
+        children: [
+          {
+            name: 'child folder2',
+            children: [
+              {name: 'hello'},
+              {name: 'wat'}
+            ]
+          },
+          {name: 'hello'},
+          {name: 'wat'},
+          {
+            name: 'child folder3',
+            children: [
+              {name: 'hello'},
+              {name: 'wat'}
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  pow = PowJS(tmpl).render(data);
+
+  it('to be equal', function() {
+    expect(pow.query('ul').length).toBe(5);
+    expect(pow.query('li').length).toBe(16);
+    expect(pow.query('div').length).toBe(12);
+    expect(pow.query('span').length).toBe(4);
   });
 });
