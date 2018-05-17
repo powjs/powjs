@@ -551,7 +551,7 @@
   function eachInference(parameter) {
     // result [parameter-clean, parameter-next]
     let
-      next = [',','v','k'],
+      next = ['','v','k'],
       force = parameter[0] === ':',
       clean = force ? parameter.substring(1) : parameter,
       params = parameter.match(EACHINFERENCE);
@@ -566,7 +566,7 @@
       let c = s.endsWith(',') ? s.slice(0, -1) : s;
       if (s.startsWith('key-') || s.startsWith('val-')) {
         clean = clean.replace(s, '');
-        next[0] = '';
+        next[0] = ',';
         next[s[0] === 'k' && 2 || 1] = c.slice(4);
         return sum;
       }
@@ -575,10 +575,14 @@
 
     if (!clean)
       throw new Error('Illegal expression on each');
+    if (!next[0] && !force) return [clean, ''];
 
-    if (next[0] === ',' && !force) return [clean, ''];
-    next[0] = '';
-    return [clean, params + next.join(',')];
+    if(params)
+      next[0] = params;
+    else
+      next.shift();
+
+    return [clean, next.join(',')];
   }
 
   function parseTemplate(txt) {

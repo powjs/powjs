@@ -239,6 +239,14 @@ let cases = [
     src: '<b param="a,b" each=":a,b">{{b}},{{k}},{{v}}</b>',
     args: [[1, 2],3],
     html: '<b>3,0,13,1,2</b>'
+  }, {
+    src: '<b param="p,b" each="p.children,val-child">{{child}},{{k}}</b>',
+    args: [{children:[1,2]},3],
+    html: '<b>1,02,1</b>'
+  }, {
+    src: '<b param="p,b" each="p.children,key-key,val-child">{{child}},{{key}}</b>',
+    args: [{children:[1,2]},3],
+    html: '<b>1,02,1</b>'
   }
 ];
 

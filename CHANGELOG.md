@@ -2,6 +2,10 @@
 
 该项目遵循 [Semantic Versioning](http://semver.org/).
 
+## 2.1.1
+
+- 修复 `each` 形参推导 BUG
+
 ## 2.1.0
 
 - 修复 `if` 指令未能正确处理 `#text string` 的 BUG
