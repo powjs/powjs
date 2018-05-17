@@ -182,6 +182,7 @@ instance.toScript();
 
 指令在节点中是属性, 值为 ECMAScript 表达式或语句, 最终拼接生成视图函数.
 
+    func   ="name"            给生成的视图函数命名
     param  ="v,k"             生成视图函数的形参: 参见示例
     if     ="cond"            渲染条件和可变标签: 参见下文
     let    ="a=expr,b=1"      局部变量: let a=expr,b=1;
@@ -210,9 +211,125 @@ instance.toScript();
 1. 设置静态属性 无插值的属性
 1. 执行生成视图函数, 具体代码和指令或插值属性出现的次序一致
 
+### func
+
+指令 `func` 给生成的视图函数命名, 以便在视图中调用.
+
+```html
+<b func="name"><i if="something && '@name' ||"></i>></b>
+<b func="name"><i do="if(something) return this.call('name',arg)"></i>></b>
+```
+
+如上所示, 调用子视图函数有两种方法:
+
+- 在 `if` 中返回 `@` 开头视图名字符串, 此时未创建当前节点, 行为是转让节点
+- 用 `this.call` 传递视图名和其它实参, 此时已创建当前节点, 行为是创建子节点
+
+调用视图相当于调用子函数, 可能产生递归甚至死循环, 应谨慎使用.
+
+例:
+
+```html
+<i if="'@name'||">never</i><span func="name">yes</span>
+<!-- render().html() output: -->
+<span>yes</span><span>yes</span>
+```
+
+例:
+
+```html
+<b><i if="'@name'||">never</i></b><span func="name">yes</span>
+<!-- render().html() output: -->
+<b><span>yes</span></b><span>yes</span>
+```
+
+例:
+
+```html
+<i do="return this.call('name')">never</i><span func="name">yes</span>
+<!-- render().html() output: -->
+<i><span>yes</span></i><span>yes</span>
+```
+
+例:
+
+```html
+<b><i do="return this.call('name')">never</i></b><span func="name">yes</span>
+<!-- render().html() output: -->
+<b><i><span>yes</span></i></b><span>yes</span>
+```
+
+### param
+
+指令 `param` 用于生成视图函数的形参, 如果使用必须包含完整的形参名列表,
+否则继承上级产生的形参名.
+
+### each-render
+
+指令 `render` 渲染子层, 并传递参数,
+`each` 遍历第一个参数, 调用 `render` 传递参数并附加 值,键(序号).
+
+支持对子层形参推导: 满足任何一个条件就进行形参推导, 否则子层继续使用继承形参.
+
+- 在值(参数)中以 `:` 开头, 从后续的实参中提取子层的形参名 `param`
+- 在 `each` 中使用 `val-`, `key-` 自定义 值,键(序号) 的形参名, 否则使用 `v,k`
+
+行为:
+
+- 形参推导不进行语法分析, 只是简单的字符串处理
+- `each` 得到的值,键(序号)形参名总是被后置
+
+例: render 参数未以 `:` 开头, 不进行形参推导
+
+```html
+<ul render="k,v"><li>{{k}}{{v}}</li></ul>
+<!-- pow.render(1,2).html() output: -->
+<ul><li>12</li></ul>
+```
+
+例: render 参数以 `:` 开头, 进行了形参推导
+
+```html
+<ul render=":k,v"><li>{{k}}{{v}}</li></ul>
+<!-- pow.render(1,2).html() output: -->
+<ul><li>21</li></ul>
+```
+
+例: each
+
+```html
+<dl param="array, id" each=":array,id">
+  <dd>{{id}}:{{item}}</dd> <!-- function(id,item,v,k) --->
+</dl>
+
+<dl param="array, id" each="array,id,val-item">
+  <dd>{{id}}:{{item}}</dd> <!-- function(id,item) --->
+</dl>
+
+<dl param="array, id" each=":array,id,val-item">
+  <dd>{{id}}:{{item}}</dd> <!-- function(id,item) --->
+</dl>
+```
+
+形参推导中的形参名提取算法:
+
+```js
+/**
+ * Split arguments expression for Parameter-Inference
+ * @param  {String} expOfRenderOrEach Does not include the starting ':'
+ * @return {array}
+ */
+function splitArguments(expOfRenderOrEach) {
+  return expOfRenderOrEach.match(/(key-|val-)?(([a-z]\w*),|([a-z]\w*)$)/ig)
+    .map(function(s) {
+      return s.endsWith(',')?s.slice(0,-1):s;
+    });
+}
+```
+
 ### if
 
-指令 `if` 会生成一个函数, 判定渲染条件的同时可以改变节点名称.
+指令 `if` 会生成一个函数, 判定渲染条件的同时可以改变节点名称, 或调用其它视图.
 
 例: 纯渲染条件
 
@@ -293,7 +410,8 @@ directives.if = function(exp, tag) {
 
 - 非字符串   放弃创建节点
 - 空字符串   放弃创建节点
-- `#` 开头   创建 `Text` 节点, 使用者需要控制后续的代码是否产生冲突
+- `#` 开头   创建 `Text` 节点, 且 '#' 之后的字符串作为节点的内容
+- `@` 开头   调用命名视图, 且传递继承的实参
 - 其它字符串 创建 `Element` 节点
 
 ### do
@@ -348,7 +466,9 @@ directives.if = function(exp, tag) {
     each(x,...)       遍历渲染, 渲染并返回 this, 内部调用 this.render(..., v, k)
     text(expr)        指令专用
     html(expr)        指令专用
+    call(name,...)    视图调用
     isRoot()          辅助方法, 返回 this 是否是最顶层的 PowJS 实例
+    isReal()          辅助方法, 返回 当前节点是否连接到真实的页面 DOM 中
     attr(attrName[,v])辅助方法, 设置或返回前节点属性值
     prop(propName[,v])辅助方法, 设置或返回前节点特征值. 比如 checked.
     firstChild()      辅助方法, 返回 this.parent.firstChild
@@ -378,13 +498,13 @@ directives.if = function(exp, tag) {
 ## isRoot
 
 模块生成的 PowJS 实例是顶层实例, 渲染过程中的会生成临时实例.
-顶层实例的 `parent` 属性和 `node` 属性是同一个对象.
+顶层实例的 `parent` 属性和 `node` 属性是同一个对象, 且顶层的 `root` 属性为 null.
 
 实现:
 
 ```js
 PowJS.prototype.isRoot = function() {
-  return !this.node.parentElement;
+  return !this.root;
 };
 ```
 
@@ -413,6 +533,13 @@ document.createDocumentFragment()
 
 不应该对顶层对象使用 `attr`, `prop` 方法. 慎用 `text`, `html` 方法.
 
+### Why
+
+不使用 `this.parent === this.node` 进行 `isRoot` 有更深层的原因:
+
+    这使得 this.parent 和 this.node 可以分离, 产生更多变化的可能.
+    比如设置 this.parent 或者 this.node 指向页面上的节点, 进行实时渲染.
+
 ## plugins
 
 插件是一个函数, 在渲染时执行. 定义:
@@ -440,9 +567,14 @@ pow(`<img src="1.jpg" do="this.attr('src','2.jpg')">`, {
             pow.attr('data-src', val);
         }
     }
-}).render().node.innerHTML;
+}).render().html();
 // output: <img data-src="2.jpg">
 ```
+
+## xPowJS
+
+可以使用 `require('powjs')()` 获得 PowJS.prototype 进行扩展.
+为防止与未来版本冲突, PowJS 保留以 `$` 开头的属性或方法, 保证不使用 `x` 开头的.
 
 ## 赞助
 

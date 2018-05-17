@@ -16,11 +16,20 @@
     ATTRS = 1,
     FN = 2,
     CHILDS = 3,
+    FUNC = 4,
     slice = Array.prototype.slice,
     toString = Object.prototype.toString,
+    RENDERINFERENCE = /(([a-z]\w*),|([a-z]\w*)$)/ig,
+    EACHINFERENCE = /(key-|val-)?(([a-z]\w*),|([a-z]\w*)$)/ig,
     TMPL = /{{|}}/m;
 
   let counter = 0, directives = Object.create(null);
+
+  directives.func = function(val) {
+    if (!val || val[0] <= '9')
+      throw new Error('Illegal func name');
+    return val;
+  };
 
   directives.param = function(args) {
     return args;
@@ -105,7 +114,8 @@
         document.createDocumentFragment().appendChild(
         document.createElement('BODY')),
         view,
-        isObject(option) && option || {}
+        isObject(option) && option || {},
+        null
       );
     pow.node = pow.parent;
     return pow;
@@ -137,24 +147,36 @@
       (len > 1 && ',' + JSON.stringify(view[1]) || '') +
       (len > 2 && ',' + funcScript(view[2]) || '') +
       (len > 3 && view[3].reduce(toScript, ',[') + ']' || '') +
+      (len > 4 && ',' + JSON.stringify(view[4]) || '' ) +
     '],';
   }
 
   function assert(node) {
-    if(node instanceof Node) return;
+    if (node instanceof Node) return;
     throw new TypeError(
-      'Failed execute DOM Manipulation on '+toString(node) +
+      'Failed execute DOM Manipulation on ' + toString(node) +
       ': parameter is not instanceof type Node'
     );
   }
 
+  function find(name, childs) {
+    if(childs) for (let i = 0; i < childs.length; i++) {
+      let
+        view = childs[i],
+        got = view[name] || view[FUNC] === name && view || find(name, view[CHILDS]);
+      if (got) return got;
+    }
+    return null;
+  }
+
   class PowJS {
-    constructor(parent, view, plugin) {
+    constructor(parent, view, plugin, root) {
       this.parent = parent;
       this.view = view;
       this.node = null;
       this.flag = 0;
       this.$ = plugin;
+      this.root = root;
     }
 
     text(text) {
@@ -180,23 +202,40 @@
       if (typeof tag === 'function') {
         tag = tag.apply(this, args);
         if (typeof tag !== 'string') return this;
-        tag = tag.trim();
+        if (tag[0] === '@') return this.call(tag.substring(1), ...args);
       }
 
       if (!tag) return this;
-      this.node = this.parent.appendChild(
-        tag[0] === '#' && document.createTextNode(tag.slice(1)) ||
-        document.createElement(tag)
-      );
 
-      for (let key in attrs)
-        this.attr(key, attrs[key]);
+      if (tag[0] === '#') {
+        this.node = this.parent.appendChild(document.createTextNode(tag.slice(1)));
+        if (tag.length > 1) return this;
+      } else {
+        this.node = this.parent.appendChild(document.createElement(tag));
+
+        for (let key in attrs)
+          this.attr(key, attrs[key]);
+      }
 
       if (fn)
         fn.apply(this, args);
       else
         this.render(...args);
       return this;
+    }
+
+    call(name, ...args) {
+      let
+        childs = this.root || this.view,
+        view = find(name, childs);
+      if (!view)
+        throw new Error(`ReferenceError: func ${name} is not defined`);
+
+      if (childs[FUNC] !== name && !childs[name]) childs[name] = view;
+
+      return new PowJS(
+        this.node || this.parent, view, this.$, this.root || this.view
+      ).create(view, ...args);
     }
 
     render(...args) {
@@ -207,7 +246,7 @@
       if (!view || this.flag & END && !root) return this;
 
       if (!(this.flag & SKIP)) view.some((view) => {
-        let flag = new PowJS(this.node, view, this.$)
+        let flag = new PowJS(this.node, view, this.$, this.root || this.view)
           .create(view, ...args).flag;
         if (flag & END) this.flag |= flag;
         return flag & (END | BREAK) && true;
@@ -242,12 +281,20 @@
     }
 
     isRoot() {
-      return !this.node.parentElement;
+      return !this.root;
+    }
+
+    isReal() {
+      if (this.node && this.node.isConnected)
+        return true;
+      let html = this.node && this.node.closest('html');
+      return html && html.parentNode &&
+        html.parentNode.nodeType === html.DOCUMENT_NODE;
     }
 
     appendTo(parentNode) {
       assert(parentNode);
-      if(!this.isRoot())
+      if (!this.isRoot())
         parentNode.appendChild(this.node);
       else
         this.node.childNodes.forEach((item) => {
@@ -258,7 +305,7 @@
     renew(node) {
       assert(node);
       let parent = node.parentNode;
-      if(!this.isRoot())
+      if (!this.isRoot())
         parent.replaceChild(this.node, node);
       else {
         let last = this.node.lastChild;
@@ -269,10 +316,10 @@
       }
     }
 
-    insertBefore(node){
+    insertBefore(node) {
       assert(node);
       let parent = node.parentNode;
-      if(!this.isRoot())
+      if (!this.isRoot())
         parent.insertBefore(this.node, node);
       else
         this.node.childNodes.forEach((item) => {
@@ -282,7 +329,7 @@
 
     insertAfter(node) {
       assert(node);
-      if(node.nextSibling)
+      if (node.nextSibling)
         this.insertBefore(node.nextSibling);
       else
         this.appendTo(node.parentNode);
@@ -290,8 +337,7 @@
 
     exports(target) {
       target = target || 'module.exports';
-      return `/*! Generated by PowJS. Do not edit */\n${target} = ` +
-       this.toScript() + ';';
+      return target + this.toScript() + ';';
     }
 
     toScript() {
@@ -324,8 +370,8 @@
         real = node[property];
 
       if (arguments.length < 2)
-        return real === undefined?
-          node.getAttribute(key):
+        return real === undefined ?
+          node.getAttribute(key) :
           real;
 
       if (real === undefined ||
@@ -388,7 +434,7 @@
 
   function compile(node, prefix, param) {
 
-    let cond = '', body = '', render = '', view = [], end = false;
+    let cond = '', body = '', render = '', next = '', view = [], end = false;
 
     if (node.nodeType === TEXT_NODE) {
       body = node.textContent.trim();
@@ -447,11 +493,23 @@
 
       if (render || end) continue;
 
-      body += di(val);
-      if (['render', 'each', 'text', 'html'].indexOf(name) >= 0)
+      if ('render' === name) {
+        if (val[0] === ':')
+          [val, next] = renderInference(val.slice(1));
         render = name;
-      else if (!val || name === 'end')
+      } else if ('each' === name) {
+        [val, next] = eachInference(val);
+        render = name;
+      }else if (['text', 'html'].indexOf(name) >= 0)
+        render = name;
+      else if (!val || 'end' === name)
         end = true;
+      else if ('func' === name) {
+        view[FUNC] = di(val);
+        continue;
+      }
+
+      body += di(val);
     }
 
     if (cond)
@@ -467,19 +525,60 @@
     }
 
     let childs = [];
+    next = next || param;
     for (let i = 0; i < node.childNodes.length; i++) {
       let child = node.childNodes[i];
       if (child.nodeType == COMMENT_NODE) continue;
 
-      let v = compile(child, prefix, param);
+      let v = compile(child, prefix, next);
       if (v) childs.push(v);
     }
-    if (childs.length) {
+    if (childs.length || view[FUNC]) {
       if (!view[ATTRS]) view[ATTRS] = 0;
       if (!view[FN]) view[FN] = 0;
-      view[CHILDS] = childs;
+      view[CHILDS] = childs.length && childs || 0;
     }
     return view;
+  }
+
+  function renderInference(clean) {
+    // result [parameter-clean, parameter-next]
+    let params = clean.match(RENDERINFERENCE);
+    if (!params) throw new Error('Illegal expression on render');
+    return [clean, params.join('')];
+  }
+
+  function eachInference(parameter) {
+    // result [parameter-clean, parameter-next]
+    let
+      next = [',','v','k'],
+      force = parameter[0] === ':',
+      clean = force ? parameter.substring(1) : parameter,
+      params = parameter.match(EACHINFERENCE);
+
+    if (!params) {
+      if (!force && clean) return [clean, '']; // complex
+      throw new Error('Illegal expression on each');
+    }
+
+    params = params.reduce((sum, s,i)=> {
+      if (!i) return '';
+      let c = s.endsWith(',') ? s.slice(0, -1) : s;
+      if (s.startsWith('key-') || s.startsWith('val-')) {
+        clean = clean.replace(s, '');
+        next[0] = '';
+        next[s[0] === 'k' && 2 || 1] = c.slice(4);
+        return sum;
+      }
+      return !sum && c || sum + ',' + c;
+    }, '');
+
+    if (!clean)
+      throw new Error('Illegal expression on each');
+
+    if (next[0] === ',' && !force) return [clean, ''];
+    next[0] = '';
+    return [clean, params + next.join(',')];
   }
 
   function parseTemplate(txt) {
@@ -499,8 +598,8 @@
     return '`' + txt + '`';
   }
 
-  if (toString.call(global) === '[object global]')
-    module.exports = Pow;
-  else
+  if (global)
     global.PowJS = Pow;
-}(typeof global !== "undefined" && global || this));
+  else
+    module.exports = Pow;
+}(this && this.window === this && this));

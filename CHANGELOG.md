@@ -2,6 +2,14 @@
 
 该项目遵循 [Semantic Versioning](http://semver.org/).
 
+## 2.1.0
+
+- 修复 `if` 指令未能正确处理 `#text string` 的 BUG
+- 变更 `isRoot` 的判断算法, 为实时渲染提供基础
+- 增加 `func` 指令命名视图, 支持视图调用
+- 增加 形参推导, 参见 `each-render` 小节
+- 增加 `isReal` 返回当前节点是否连接到真实的页面 DOM 中
+
 ## 2.0.0
 
 - 变更 环境 ECMAScript 6

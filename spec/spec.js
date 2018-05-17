@@ -24,6 +24,16 @@ function real(selector) {
   return document.body.querySelectorAll(selector);
 }
 
+function sandbox () {
+  return PowJS('<div class="sandbox"></div>').render();
+}
+
+function realbox () {
+  let pow = PowJS('<div class="realbox"></div>');
+  pow.node = document.body;
+  return pow.render();
+}
+
 let cases = [
   {
     src: '<b text="User: {{v}}"></b>',
@@ -201,6 +211,34 @@ let cases = [
         </div>
       </nav>`,
     args: ['First','Second','Third']
+  }, {
+    src: `<b if="v===1&&'---'||'#never'">yes</b>`,
+    args: [1],
+    html: '<b>yes</b>'
+  }, {
+    src: `<b if="v===1&&'---'||'#yes'">never</b>`,
+    args: [2],
+    html: 'yes'
+  }, {
+    src: '<ul render=":k,v"><li>{{k}}{{v}}</li></ul>',
+    args: [1, 2],
+    html: '<ul><li>21</li></ul>'
+  }, {
+    src: '<ul render="k"><li>{{v}}</li></ul>',
+    args: [1, 2],
+    html: '<ul><li>2</li></ul>'
+  }, {
+    src: '<b param="a,b" each="a,b,key-key,val-val">{{b}},{{key}},{{val}}</b>',
+    args: [[1, 2],3],
+    html: '<b>3,0,13,1,2</b>'
+  }, {
+    src: '<b param="a,b" each="a,b,val-val,key-key">{{b}},{{key}},{{val}}</b>',
+    args: [[1, 2],3],
+    html: '<b>3,0,13,1,2</b>'
+  }, {
+    src: '<b param="a,b" each=":a,b">{{b}},{{k}},{{v}}</b>',
+    args: [[1, 2],3],
+    html: '<b>3,0,13,1,2</b>'
   }
 ];
 
@@ -215,7 +253,7 @@ describe('render', function() {
         pow.each(args);
       else
         pow.render(...args);
-      let html = pow.node.innerHTML;
+      let html = pow.html();
       if (cas.html)
         expect(html).toBe(cas.html);
       else
@@ -225,10 +263,6 @@ describe('render', function() {
 });
 
 describe('DOM Manipulation', function () {
-  function sandbox (){
-    return PowJS('<div class="sandbox"></div>').render();
-  }
-
   it('appendTo, renew', function () {
     let pow = sandbox();
     pow.appendTo(document.body);
@@ -245,5 +279,49 @@ describe('DOM Manipulation', function () {
     let pow = sandbox();
     expect(()=> pow.render().renew()).toThrowError(/Manipulation/);
     expect(()=> pow.render().renew(real('.sandbox'))).toThrowError(/Manipulation/);
+  });
+});
+
+describe('Transfer', function() {
+  it('top transfer', function() {
+    let
+      pow = PowJS(`
+      <i if="'@name'||">never</i>
+      <span func="name">yes</span>
+    `),
+    html = pow.render().html();
+    expect(html).toBe('<span>yes</span><span>yes</span>');
+  });
+
+  it('sub transfer', function() {
+    let
+      pow = PowJS(`
+      <b><i if="'@name'||">never</i></b>
+      <span func="name">yes</span>
+    `),
+    html = pow.render().html();
+    expect(html).toBe('<b><span>yes</span></b><span>yes</span>');
+  });
+});
+
+describe('call', function() {
+  it('top call', function() {
+    let
+      pow = PowJS(`
+      <i do="return this.call('name')">never</i>
+      <span func="name">yes</span>
+    `),
+    html = pow.render().html();
+    expect(html).toBe('<i><span>yes</span></i><span>yes</span>');
+  });
+
+  it('sub call', function() {
+    let
+      pow = PowJS(`
+      <b><i do="return this.call('name')">never</i></b>
+      <span func="name">yes</span>
+    `),
+    html = pow.render().html();
+    expect(html).toBe('<b><i><span>yes</span></i></b><span>yes</span>');
   });
 });
