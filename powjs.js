@@ -6,9 +6,11 @@
   /*! MIT License https://github.com/powjs/powjs/blob/master/LICENSE */
 
   const
-    TEXT_NODE = 3,
-    COMMENT_NODE = 8,
-    DOCUMENT_FRAGMENT_NODE = 11,
+    TEXT_NODE = Node.TEXT_NODE,
+    COMMENT_NODE = Node.COMMENT_NODE,
+    ELEMENT_NODE = Node.ELEMENT_NODE,
+    DOCUMENT_NODE = Node.DOCUMENT_NODE,
+    DOCUMENT_FRAGMENT_NODE = Node.DOCUMENT_FRAGMENT_NODE,
     BREAK = 1,
     SKIP = 2,
     END = 4,
@@ -83,14 +85,19 @@
     if (source === undefined) return PowJS.prototype;
 
     if (typeof source === 'string')
-      source = slice.call(childNodes(source));
-    else if (source instanceof Node)
-      source = [source];
-    else if (Array.isArray(source) && Array.isArray(source[0]))
+      source = childNodes(source);
+    else if (source instanceof Node) {
+      if (source.nodeType === DOCUMENT_FRAGMENT_NODE)
+        source = source.childNodes;
+      else if (source.nodeName === 'TEMPLATE')
+        source = source.content.childNodes;
+      else
+        source = [source];
+    } else if (Array.isArray(source) && Array.isArray(source[0]))
       view = source;
-    else {
-      let array = slice.call(source);
-      if (array[0] instanceof Node)
+    else if (toString.call(source) !== '[object NodeList]') {
+      let array = Array.from(source);
+      if (array.length && array.every(node=> node instanceof Node))
         source = array;
       else
         throw new TypeError(
@@ -100,18 +107,17 @@
 
     if (!view) {
       let prefix = typeof option === 'string' && option || '';
-      view = source.reduce((view, node) => {
+      view = [];
+      source.forEach((node) => {
         node.normalize();
         let v = compile(node, prefix, 'v,k');
         if (v) view.push(v);
-        return view;
-      }, []);
+      });
     }
 
     let
       pow = new PowJS(
-        document.createDocumentFragment().appendChild(
-        document.createElement('BODY')),
+        document.createElement('template').content,
         view,
         isObject(option) && option || {},
         null
@@ -125,11 +131,10 @@
   }
 
   function childNodes(source) {
-    let b = document.createDocumentFragment()
-     .appendChild(document.createElement('BODY'));
+    let box = document.createElement('template');
 
-    b.innerHTML = source.trim();
-    return b.childNodes;
+    box.innerHTML = source;
+    return box.content.childNodes;
   }
 
   function funcScript(fn) {
@@ -168,6 +173,27 @@
     return null;
   }
 
+  function innerHtml(node) {
+    if (node.nodeType === ELEMENT_NODE)
+      return node.innerHTML;
+    if (node.nodeType === TEXT_NODE)
+      return node.textContent;
+    if (node.nodeType === COMMENT_NODE)
+      return '<!--' + node.textContent + '-->';
+    if (isConnected(node))
+      return node.innerHTML;
+    return null;
+  }
+
+  function isConnected(node) {
+    let real = node && node.isConnected;
+    if (real !== undefined) return real;
+    if (!node) return false;
+    real = node;
+    while (real.parentNode) real = real.parentNode;
+    return real.nodeType === DOCUMENT_NODE;
+  }
+
   class PowJS {
     constructor(parent, view, plugin, root) {
       this.parent = parent;
@@ -184,12 +210,34 @@
     }
 
     html(html) {
-      if (!arguments.length)
-       return this.node.innerHTML || this.node.textContent;
-      if (this.node.nodeType === TEXT_NODE)
-       this.node.textContent = html + '';
-      else
-       this.node.innerHTML = html + '';
+      if (!arguments.length) {
+        html = innerHtml(this.node);
+        if (html === null) {
+          let box = document.createElement('template')
+              .content.appendChild(document.createElement('html'));
+          while (this.node.firstChild)
+            box.appendChild(this.node.firstChild);
+
+          html = box.innerHTML;
+
+          while (box.firstChild)
+            this.node.appendChild(box.firstChild);
+        }
+        return html;
+      }
+
+      if (this.node.nodeType === ELEMENT_NODE)
+        this.node.innerHTML = html + '';
+      else if (this.node.nodeType === TEXT_NODE ||
+        this.node.nodeType === COMMENT_NODE)
+        this.node.textContent = html + '';
+      else {
+        while (this.node.firstChild)
+          this.node.removeChild(this.node.firstChild);
+        childNodes(html).forEach((item) => {
+          this.node.appendChild(item);
+        });
+      }
     }
 
     create(view, ...args) {
@@ -206,6 +254,16 @@
       if (!tag) return this;
 
       if (tag[0] === '@') return this.call(tag.substring(1), ...args);
+
+      if (tag[0] === '^') {
+        this.parent.textContent = tag.substring(1);
+        return this;
+      }
+
+      if (tag[0] === '!') {
+        this.node = this.parent.appendChild(document.createComment(tag.slice(1)));
+        return this;
+      }
 
       if (tag[0] === '#') {
         this.node = this.parent.appendChild(document.createTextNode(tag.slice(1)));
@@ -272,7 +330,7 @@
           return this.flag & END && true;
         });
       } else if (typeof x === 'object') {
-        if (!Array.isArray(x)) x = slice.call(x);
+        if (!Array.isArray(x)) x = Array.from(x);
         args.push(x.length);
         x.some((v, k) => {
           args[i] = x[k];
@@ -290,11 +348,7 @@
     }
 
     isReal() {
-      if (this.node && this.node.isConnected)
-        return true;
-      let html = this.node && this.node.closest('html');
-      return html && html.parentNode &&
-        html.parentNode.nodeType === html.DOCUMENT_NODE;
+      return isConnected(this.node);
     }
 
     appendTo(parentNode) {
@@ -457,6 +511,14 @@
       return view;
     }
 
+    if (node.nodeType == COMMENT_NODE) {
+      view.push('!' + node.textContent);
+      return view;
+    }
+
+    if (node.nodeType !== ELEMENT_NODE)
+      return null;
+
     view[TAG] = node.nodeName;
     let attrs = node.attributes;
     for (let i = 0; i < attrs.length; i++) {
@@ -537,14 +599,17 @@
     }
 
     let childs = [];
-    next = next || param;
-    for (let i = 0; i < node.childNodes.length; i++) {
-      let child = node.childNodes[i];
-      if (child.nodeType == COMMENT_NODE) continue;
-
-      let v = compile(child, prefix, next);
-      if (v) childs.push(v);
+    if ('SCRIPT' === node.nodeName || 'STYLE' === node.nodeName) {
+      next = node.textContent;
+      if (next) childs.push(['^' + next]);
+    }else {
+      next = next || param;
+      node.childNodes.forEach((child) => {
+        let v = compile(child, prefix, next);
+        if (v) childs.push(v);
+      });
     }
+
     if (childs.length || view[FUNC]) {
       if (!view[ATTRS]) view[ATTRS] = 0;
       if (!view[FN]) view[FN] = 0;

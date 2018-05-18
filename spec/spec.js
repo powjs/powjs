@@ -2,13 +2,14 @@
 
 if (typeof PowJS === 'undefined') {
   // For Jasmine without Karma
+  let
+    JSDOM = require('jsdom').JSDOM,
+    win = new JSDOM('<!doctype html><html><head><style>b{}/*{{}}*/</style></head><body></body></html>').window;
+  document = win.document;
+  Node = win.Node;
+  NodeList = win.NodeList;
   PowJS = require('../powjs.js');
-  JSDOM = require('jsdom').JSDOM;
   prettier = require('prettier');
-  window = new JSDOM('<!doctype html><html><body></body></html>').window;
-  document = window.document;
-  Node = window.Node;
-  HTMLElement = window.HTMLElement;
 }
 
 function format(code, ret) {
@@ -26,12 +27,6 @@ function real(selector) {
 
 function sandbox() {
   return PowJS('<div class="sandbox"></div>').render();
-}
-
-function realbox() {
-  let pow = PowJS('<div class="realbox"></div>');
-  pow.node = document.body;
-  return pow.render();
 }
 
 let cases = [
@@ -161,10 +156,10 @@ let cases = [
     args: [[1, 2]],
     html: '<p><b class="1"><i>0</i></b>once<b class="2"></b></p>'
   }, {
-    opts: {src1: function(pow, val) {
+    opts: {src: function(pow, val) {
         pow.attr('data-src', val);
       }},
-    src: `<img src1="1.jpg" do="this.attr('src1','2.jpg')">`,
+    src: `<img src="1.jpg" do="this.attr('src','2.jpg')">`,
     args: [],
     html: '<img data-src="2.jpg">'
   }, {
@@ -247,14 +242,48 @@ let cases = [
     src: '<b param="p,b" each="p.children,key-key,val-child,num-row">{{child}},{{key}},{{$l}},{{row}}{{$l!==row&&"/"||""}}</b>',
     args: [{children: [1,2]},3],
     html: '<b>1,0,2,1/2,1,2,2</b>'
+  }, {
+    src: '<head><style>body{background: {{v}};}</style></head>',
+    args: ['red'],
+    html: '<style>body{background: {{v}};}</style>'
+  }, {
+    src: '<head></head>',
+    args: [],
+    html: ''
+  }, {
+    src: '<body>x</body>',
+    args: [],
+    html: 'x'
+  }, {
+    src: document.createElement('body'),
+    args: [],
+    html: '<body></body>'
+  }, {
+    src: document.createElement('head'),
+    args: [],
+    html: '<head></head>'
+  }, {
+    src: document.createElement('html'),
+    args: [],
+    html: '<html></html>'
+  }, {
+    src: '<!--- {{v}} --->',
+    args: [1],
+    html: '<!--- {{v}} --->'
+  }, {
+    // 需要同时兼容测试时的浏览器内容
+    src: document.querySelector('head').childNodes,
+    args: [],
+    html: document.querySelector('head').innerHTML.trim().replace(/(\n *)/mg,'')
   }
 ];
 
 describe('render', function() {
   cases.some((cas,i) => {
     it(`${i}:${cas.src}`, function() {
-      let pow = PowJS(cas.src, cas.opts),
-      args = cas.args || [];
+      let
+        pow = PowJS(cas.src, cas.opts),
+        args = cas.args || [];
       if (cas.echo)
         format(pow.toScript());
       if (cas.each)

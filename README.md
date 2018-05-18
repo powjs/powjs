@@ -15,7 +15,7 @@ PowJS 是一个 ECMAScript 6 编译型 Real-DOM 模板引擎.
     缺省形参 顶层缺省形参为 (v, k)
     形参传递 除非使用 param 指令, 子层继承上层的形参
 
-绕过文档直视 [Demo](https://codepen.io/achun/project/full/XjEvaw)
+分享请至 [Wiki][].
 
 流程
 
@@ -177,8 +177,6 @@ instance.toScript();
   ]
 ]
 ```
-
-更多信息请至 [Wiki][].
 
 ## 指令
 
@@ -491,7 +489,7 @@ directives.if = function(exp, tag) {
     text(expr)        指令专用
     html(expr)        指令专用
     call(name,...)    视图调用
-    isRoot()          辅助方法, 返回 this 是否是最顶层的 PowJS 实例
+    isRoot()          辅助方法, 返回 this 是否是顶层视图的 PowJS 实例
     isReal()          辅助方法, 返回 当前节点是否连接到真实的页面 DOM 中
     attr(attrName[,v])辅助方法, 设置或返回前节点属性值
     prop(propName[,v])辅助方法, 设置或返回前节点特征值. 比如 checked.
@@ -521,7 +519,7 @@ directives.if = function(exp, tag) {
 
 ## isRoot
 
-模块生成的 PowJS 实例是顶层实例, 渲染过程中的会生成临时实例.
+顶层视图生成的 PowJS 实例是顶层实例, 渲染过程中的会生成临时实例.
 顶层实例的 `parent` 属性和 `node` 属性是同一个对象, 且顶层的 `root` 属性为 null.
 
 实现:
@@ -535,13 +533,10 @@ PowJS.prototype.isRoot = function() {
 这个对象是:
 
 ```js
-document.createDocumentFragment()
-  .appendChild(
-    document.createElement('BODY')
-  );
+document.createElement('template').content;
 ```
 
-所以渲染过程在 DocumentFragment 中进行, 不直接影响页面.
+渲染过程是在 template -> DocumentFragment 中进行, 不直接影响页面.
 
 顶层实例可能会拥有多个子节点, 这取决于:
 

@@ -2,6 +2,12 @@
 
 该项目遵循 [Semantic Versioning](http://semver.org/).
 
+## 2.2.1
+
+- 优化 顶层节点类型为 template.content, 渲染时图片等资源不会被加载
+- 优化 保持 `^`style, `^`script, `!`Comment 的原始内容, 不做插值处理
+- 优化 模板处理 DocumentFragment,HTMLTemplateElement,NodeList,Node,[Node],String
+
 ## 2.2.0
 
 - 修复 `exports` 导出 BUG
