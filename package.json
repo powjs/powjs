@@ -1,8 +1,8 @@
 {
   "name": "powjs",
   "description": "JavaScript template engine for HTML and Node",
-  "version": "2.2.0",
-  "homepage": "http://powjs.com",
+  "version": "2.2.1",
+  "homepage": "https://powjs.com",
   "repository": "git+https://github.com/powjs/powjs.git",
   "license": "MIT",
   "keywords": [
