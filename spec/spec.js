@@ -152,7 +152,7 @@ let cases = [
     args: [[1, 2]],
     html: '<p><b class="1"><i>0</i></b>once<b class="2"><i>1</i></b></p>'
   }, {
-    src: '<p each="v"><b if="v" class="{{v}}" break="v===2" end="v===2"><i>{{k}}</i></b>once</p>',
+    src: '<p each="v"><b if="v" class="{{v}}" break="v===2" end="v===2" render="v,k"><i>{{k}}</i></b>once</p>',
     args: [[1, 2]],
     html: '<p><b class="1"><i>0</i></b>once<b class="2"></b></p>'
   }, {
@@ -177,14 +177,20 @@ let cases = [
     html: '<p><b>a</b></p>'
   }, {
     src: `<div
-          param="a, b"
+          param="a"
           if="a"
-          let="c=a+' '+b"
-          do="console.log(b)"
-          class="a-class {{a}}"
-          text="c"></div>`,
+          do="console.log(never)">
+          </div>`,
     args: [],
     html: ''
+  }, {
+    src: `<div param="a" each="a" do="this.text('yes')">{{a}}</div>`,
+    args: [1,2],
+    html: '<div>yes</div>'
+  }, {
+    src: `<div param="a" each="a" each="a">{{a}}</div>`,
+    args: [[1,2]],
+    html: '<div>12</div>'
   }, {
     src: '<ul param="data" if="Array.isArray(data)"></ul>',
   }, {
@@ -274,7 +280,7 @@ let cases = [
     // 需要同时兼容测试时的浏览器内容
     src: document.querySelector('head').childNodes,
     args: [],
-    html: document.querySelector('head').innerHTML.trim().replace(/(\n *)/mg,'')
+    html: document.querySelector('head').innerHTML.trim().replace(/(\n *)/mg, '')
   }
 ];
 
@@ -371,6 +377,30 @@ describe('call', function() {
   });
 });
 
+describe('Logic conflict', function() {
+  let cases = [
+    '<b skip text=""></b>',
+    '<b skip html=""></b>',
+    '<b skip render="dd"></b>',
+    '<b skip each="dd"></b>',
+    '<b end text=""></b>',
+    '<b end html=""></b>',
+    '<b end render="dd"></b>',
+    '<b end each="dd"></b>',
+    '<b text="" skip ></b>',
+    '<b html="" skip ></b>',
+    '<b render="dd" skip ></b>',
+    '<b each="dd" skip ></b>',
+  ];
+
+  it('Expect conflict', function() {
+    cases.forEach((source) =>
+      expect(()=> PowJS(source)).toThrowError(/Logic conflict/)
+    );
+  });
+
+});
+
 describe('Case-Folders', function() {
   let tmpl = `
    <ul param="model, open" render="open, model">
@@ -422,5 +452,14 @@ describe('Case-Folders', function() {
     expect(pow.query('li').length).toBe(16);
     expect(pow.query('div').length).toBe(12);
     expect(pow.query('span').length).toBe(4);
+  });
+});
+
+describe('exports', function() {
+  it('exports', function() {
+    let pow = PowJS('text');
+    expect(pow.toScript()).toBe('[[\'#text\']]');
+    expect(pow.exports()).toBe('module.exports = [[\'#text\']];');
+    expect(pow.exports('a')).toBe('a = [[\'#text\']];');
   });
 });

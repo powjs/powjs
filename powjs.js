@@ -25,58 +25,65 @@
     EACHINFERENCE = /(key-|val-|len-|num-)?(([a-z]\w*),|([a-z]\w*)$)/ig,
     TMPL = /{{|}}/m;
 
-  let counter = 0, directives = Object.create(null);
+  let counter = 0, directives = {
 
-  directives.func = function(val) {
-    if (!val || val[0] <= '9')
-      throw new Error('Illegal func name');
-    return val;
-  };
+    func: function(exp) {
+      if (!exp || exp[0] <= '9') {
+        exp = JSON.stringify(exp);
+        throw new SyntaxError(
+          `Invalid function ${exp} on func directive`
+        );
+      }
+      return exp;
+    },
+    param: function(exp) {
+      return exp;
+    },
+    if: function(exp, tag, param) {
+      if (!exp) throw new SyntaxError(
+        'Missing condition on if directive'
+      );
 
-  directives.param = function(args) {
-    return args;
-  };
+      if (exp.includes('---'))
+        exp = exp.replace(/---/g, tag) + ';';
+      else if (!exp.endsWith(';'))
+        exp = `${exp} && '${tag}';`;
 
-  directives.if = function(exp, tag) {
-    if (exp.includes('---')) {
-      exp = exp.replace(/---/g, tag);
-      return `return ${exp};`;
+      return new Function(param,'return ' + exp); // jshint ignore:line
+    },
+    let: function(exp) {
+      if (!exp) throw new SyntaxError(
+        'Missing assignment statement on let directive'
+      );
+      return `let ${exp};`;
+    },
+    do: function(exp) {
+      return exp + ';';
+    },
+    text: function(exp) {
+      return 'this.text(' + exp + ');';
+    },
+    html: function(exp) {
+      return 'this.html(' + exp + ');';
+    },
+    skip: function(exp) {
+      return !exp && 'return this.skip();' ||
+       `if(${exp}) return this.skip();`;
+    },
+    break: function(exp) {
+      return !exp && 'this.break();' ||
+       `if(${exp}) this.break();`;
+    },
+    end: function(exp) {
+      return !exp && 'return this.end();' ||
+       `if(${exp}) return this.end();`;
+    },
+    render: function(exp) {
+      return `this.render(${exp});`;
+    },
+    each: function(exp) {
+      return `this.each(${exp});`;
     }
-
-    if (exp.endsWith(';')) return `return ${exp}`;
-    return `return ${exp} && '${tag}';`;
-  };
-
-  directives.let = function(exp) {
-    return exp && 'let ' + exp + ';' || ';';
-  };
-  directives.do = function(exp) {
-    return exp + ';';
-  };
-  directives.text = function(exp) {
-    return 'this.text(' + exp + ');';
-  };
-  directives.html = function(exp) {
-    return 'this.html(' + exp + ');';
-  };
-
-  directives.skip = function(exp) {
-    return !exp && 'return this.skip();' ||
-     'if(' + exp + ') return this.skip();';
-  };
-  directives.break = function(exp) {
-    return !exp && 'this.break();' ||
-     'if(' + exp + ') this.break();';
-  };
-  directives.end = function(exp) {
-    return !exp && 'return this.end();' ||
-     'if(' + exp + ') return this.end();';
-  };
-  directives.render = function(args) {
-    return 'this.render(' + args + ');';
-  };
-  directives.each = function(args) {
-    return 'this.each(' + args + ');';
   };
 
   function Pow(source, option) {
@@ -493,7 +500,7 @@
 
   function compile(node, prefix, param) {
 
-    let cond = '', body = '', render = '', next = '', view = [], end = false;
+    let body = '', render = '', next = '', view = [], end = '';
 
     if (node.nodeType === TEXT_NODE) {
       body = node.textContent.trim();
@@ -523,14 +530,13 @@
     let attrs = node.attributes;
     for (let i = 0; i < attrs.length; i++) {
       let
-        name = attrs[i].name,
-        val = attrs[i].value.trim(),
-        di = directives[
-          prefix && name.startsWith(prefix) ?
-          name.slice(prefix.length) : name];
+        val = attrs[i].name,
+        name = prefix && val.startsWith(prefix) ? val.slice(prefix.length) : val,
+        di = directives.hasOwnProperty(name) && directives[name];
+
+      val = attrs[i].value.trim();
 
       if (!di) {
-
         if (val.indexOf('{{') !== -1)
           body += !end ? 'this.attr("' + name + '",' +
             parseTemplate(val) + ');' : '';
@@ -541,37 +547,22 @@
         continue;
       }
 
-      if (prefix) name = name.slice(prefix.length);
-
-      if (name === 'param') {
-        param = val;
-        continue;
-      }
-
-      if (val.indexOf('{{') !== -1)
-        val = parseTemplate(val);
-
-      if (name === 'if') {
-        if (!val) throw new Error(
-          'Missing condition on if directive'
-        );
-
-        cond = val;
-        continue;
-      }
-
-      if (['break', 'end'].indexOf(name) >= 0) {
-        body += di(val);
-        end = end || !val;
-        continue;
-      }
-
       if ('func' === name) {
         view[FUNC] = di(val);
         continue;
       }
 
-      if (render) continue;
+      if ('param' === name) {
+        param = di(val);
+        continue;
+      }
+
+      if (val.indexOf('{{') !== -1) val = parseTemplate(val);
+
+      if ('if' === name) {
+        view[TAG] = di(val, view[TAG], param);
+        continue;
+      }
 
       if ('render' === name) {
         if (val[0] === ':')
@@ -582,15 +573,14 @@
         render = name;
       }else if (['text', 'html'].indexOf(name) >= 0)
         render = name;
+      else if (['skip', 'break', 'end'].indexOf(name) >= 0)
+        end = !val && name || end;
+
+      if (render && end && 'break' !== end)
+        throw new Error(conflict(name, end));
 
       body += di(val);
     }
-
-    if (cond)
-      view[TAG] = new Function( // jshint ignore:line
-        param,
-        directives.if(cond, view[TAG])
-      );
 
     if (body) {
       if (!render) body += directives.render(param);
@@ -616,6 +606,10 @@
       view[CHILDS] = childs.length && childs || 0;
     }
     return view;
+  }
+
+  function conflict(name, end) {
+    return `Logic conflict, before ${name} has ${end}`;
   }
 
   function renderInference(clean) {

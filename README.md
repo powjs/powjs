@@ -7,7 +7,7 @@
 
 PowJS 是一个 ECMAScript 6 编译型 Real-DOM 模板引擎.
 
-    Real DOM 直接在 DOM Tree 上编译, 渲染. DOM Tree 就是模板.
+    Real-DOM 直接在 DOM Tree 上编译, 渲染. DOM Tree 就是模板
     原生语法 指令与 ECMAScript 原生语法对应
     导出视图 采用 ECMAScript 源码
     属性插值 name="somethin {{expr}}"
@@ -198,18 +198,54 @@ instance.toScript();
     render ="args,argsN"      渲染子层: this.render(args,argsN);
     each   ="expr,args,argsN" 遍历渲染子层: this.each(expr,args,argsN);
 
-指令 `param` 和 `if` 应该位于其它指令指令之前, 其它指令或插值属性按照出现的次序
-生成视图函数主体代码.
+### 指令顺序
 
-如果没有使用 `render` 或 `each`, PowJS 会生成缺省的并带上继承的形参.
+首先指令作为节点属性不会重复, 这是 HTML DOM 规范规定的.
 
-### 节点构建次序
-
-节点构建次序:
+指令执行顺序:
 
 1. 创建节点 包含 `if` 指令产生的代码
 1. 设置静态属性 无插值的属性
 1. 执行生成视图函数, 具体代码和指令或插值属性出现的次序一致
+
+前文的示例已经表明, PowJS 的模板结构和视图函数是完全对应的:
+
+```html
+<tag func="name" param="data" if="Array.isArray(data)"
+  id="{{data[0]}}" each="data" break class="static">
+  <!-- ... -->
+</tag>
+```
+
+对应伪代码:
+
+```js
+function name(data) {
+  if(Array.isArray(data))
+    this.create('tag', {class:'static'});
+  else
+    return;
+  this.attr('id', data[0]);
+  this.each(data);
+  this.break();
+}
+```
+
+指令 `skip` 不应该写在 `each`, `render`, `html`, `text` 之后, 因为子层已被渲染.
+同理先写 `end` 的话后续指令不会被执行.
+
+有可能需要在 `each`, `render` 之后写 `do` 指令做后续的处理.
+
+PowJS 在编译期会检查有明显冲突的指令顺序, 养成良好的指令顺序书写习惯更重要.
+比如指令 `func`, `param`, `if` 应该写在最前面才利于阅读.
+
+### 插值
+
+插值被转换为 ECMAScript 模板字符串, PowJS 只是替换 `{{`, `}}` 为 `${`,`}`.
+
+    abc {{exp}} def  ===> `abc ${exp} def`
+
+因此有些指令不能使用插值, 比如 `func`, `param`, `render`, `each`.
 
 ### func
 
@@ -317,15 +353,15 @@ instance.toScript();
 
 ```html
 <dl param="array, id" each=":array,id">
-  <dd>{{id}}:{{item}}</dd> <!-- function(id,item,v,k,$l,$n) --->
+  <dd>{{id}}:{{item}}</dd> <!-- function(id,item,v,k,$l,$n) -->
 </dl>
 
 <dl param="array, id" each="array,id,val-item">
-  <dd>{{id}}:{{item}}</dd> <!-- function(id,item,k,$l,$n) --->
+  <dd>{{id}}:{{item}}</dd> <!-- function(id,item,k,$l,$n) -->
 </dl>
 
 <dl param="array, id" each=":array,id,val-item,num-row">
-  <dd>{{id}}:{{item}}</dd> <!-- function(id,item,key,$l,row) --->
+  <dd>{{id}}:{{item}}</dd> <!-- function(id,item,key,$l,row) -->
 </dl>
 ```
 
@@ -491,8 +527,8 @@ directives.if = function(exp, tag) {
     call(name,...)    视图调用
     isRoot()          辅助方法, 返回 this 是否是顶层视图的 PowJS 实例
     isReal()          辅助方法, 返回 当前节点是否连接到真实的页面 DOM 中
-    attr(attrName[,v])辅助方法, 设置或返回前节点属性值
-    prop(propName[,v])辅助方法, 设置或返回前节点特征值. 比如 checked.
+    attr(attrName[,v])辅助方法, 设置或返回当前节点属性值
+    prop(propName[,v])辅助方法, 设置或返回当前节点特征值. 比如 checked.
     firstChild()      辅助方法, 返回 this.parent.firstChild
     childNodes()      辅助方法, 返回 this.parent.childNodes
     lastChild()       辅助方法, 返回 this.parent.lastChild

@@ -2,6 +2,10 @@
 
 该项目遵循 [Semantic Versioning](http://semver.org/).
 
+## 2.2.2
+
+- 优化 指令顺序冲突检测
+
 ## 2.2.1
 
 - 优化 顶层节点类型为 template.content, 渲染时图片等资源不会被加载
