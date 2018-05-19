@@ -2,6 +2,14 @@
 
 该项目遵循 [Semantic Versioning](http://semver.org/).
 
+## 2.2.3
+
+- 修复 `exports` 导出 BUG
+- 优化 使用 `ownerDocument.adoptNode` 进行节点操作
+- 变更 使用 `=` 替代 `^` 表示直接向 `this.parent.textContent` 赋值
+- 增加 `removeChilds` 删除 this.node 下全部的子节点
+- 增加 伪节点支持, 以 `:` 开头, 执行操作 `this.node = this.parent`
+
 ## 2.2.2
 
 - 优化 指令顺序冲突检测
@@ -15,7 +23,7 @@
 ## 2.2.0
 
 - 修复 `exports` 导出 BUG
-- 优化 `toString` 输出
+- 优化 `toScript` 输出
 - 变更 `if` 指令取消尾部 `||` 规则, 优化为尾部 `;` 判断
 - 增加 `each` 附加参数以及形参推导
 

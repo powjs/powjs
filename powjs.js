@@ -11,14 +11,8 @@
     ELEMENT_NODE = Node.ELEMENT_NODE,
     DOCUMENT_NODE = Node.DOCUMENT_NODE,
     DOCUMENT_FRAGMENT_NODE = Node.DOCUMENT_FRAGMENT_NODE,
-    BREAK = 1,
-    SKIP = 2,
-    END = 4,
-    TAG = 0,
-    ATTRS = 1,
-    FN = 2,
-    CHILDS = 3,
-    FUNC = 4,
+    // BREAK = 1, SKIP = 2, END = 4,
+    // TAG = 0, ATTRS = 1, FN = 2, CHILDS = 3, FUNC = 4,
     slice = Array.prototype.slice,
     toString = Object.prototype.toString,
     RENDERINFERENCE = /(([a-z]\w*),|([a-z]\w*)$)/ig,
@@ -146,7 +140,7 @@
 
   function funcScript(fn) {
     return fn.toString()
-      .replace(/^function anonymous\(/, 'function \(')
+      .replace(/^function( (anonymous)?)?\(/, 'function \(')
       .replace('\n/*``*/', '');
   }
 
@@ -162,19 +156,11 @@
     ']';
   }
 
-  function assert(node) {
-    if (node instanceof Node) return;
-    throw new TypeError(
-      'Failed execute DOM Manipulation on ' + toString(node) +
-      ': parameter is not instanceof type Node'
-    );
-  }
-
   function find(name, childs) {
     if (childs) for (let i = 0; i < childs.length; i++) {
       let
         view = childs[i],
-        got = view[name] || view[FUNC] === name && view || find(name, view[CHILDS]);
+        got = view[name] || view[4] === name && view || find(name, view[3]);
       if (got) return got;
     }
     return null;
@@ -249,9 +235,8 @@
 
     create(view, ...args) {
       let
-        tag = view[TAG],
-        attrs = view[ATTRS],
-        fn = view[FN];
+        tag = view[0],
+        fn = view[2];
 
       if (typeof tag === 'function') {
         tag = tag.apply(this, args);
@@ -260,24 +245,30 @@
 
       if (!tag) return this;
 
-      if (tag[0] === '@') return this.call(tag.substring(1), ...args);
-
-      if (tag[0] === '^') {
-        this.parent.textContent = tag.substring(1);
-        return this;
-      }
-
-      if (tag[0] === '!') {
-        this.node = this.parent.appendChild(document.createComment(tag.slice(1)));
-        return this;
-      }
-
-      if (tag[0] === '#') {
-        this.node = this.parent.appendChild(document.createTextNode(tag.slice(1)));
-        if (tag.length > 1) return this;
-      } else {
-        this.node = this.parent.appendChild(document.createElement(tag));
-
+      let c = tag.charCodeAt(0);
+      if (c < 0x41) {    // A
+        if (c === 0x23) { // #
+          this.node = this.parent.appendChild(
+            document.createTextNode(tag.slice(1))
+          );
+          if (!fn) return this;
+        } else if (c === 0x40) // @
+          return this.call(tag.substring(1), ...args);
+        else if (c === 0x3D) { // =
+          this.parent.textContent = tag.substring(1);
+          return this;
+        } else if (c === 0x21) { // !
+          this.node = this.parent.appendChild(
+            document.createComment(tag.slice(1))
+          );
+          return this;
+        } else if (c === 0x3A) // :
+          this.node = this.parent;
+      } else if (c<=0x5A || c>=0x61 && c<=0x7A) { // Z, a-z
+        this.node = this.parent.appendChild(
+          document.createElement(tag)
+        );
+        let attrs = view[1];
         for (let key in attrs)
           this.attr(key, attrs[key]);
       }
@@ -296,7 +287,7 @@
       if (!view)
         throw new Error(`ReferenceError: func ${name} is not defined`);
 
-      if (childs[FUNC] !== name && !childs[name]) childs[name] = view;
+      if (childs[4] !== name && !childs[name]) childs[name] = view;
 
       return new PowJS(
         this.node || this.parent, view, this.$, this.root || this.view
@@ -306,15 +297,15 @@
     render(...args) {
       let
         root = this.isRoot(),
-        view = root && this.view || this.view[CHILDS];
+        view = root && this.view || this.view[3];
 
-      if (!view || this.flag & END && !root) return this;
+      if (!view || this.flag & 4 && !root) return this;
 
-      if (!(this.flag & SKIP)) view.some((view) => {
+      if (!(this.flag & 2)) view.some((view) => {
         let flag = new PowJS(this.node, view, this.$, this.root || this.view)
           .create(view, ...args).flag;
-        if (flag & END) this.flag |= flag;
-        return flag & (END | BREAK) && true;
+        if (flag & 4) this.flag |= flag;
+        return flag & 5 && true;
       });
 
       return this;
@@ -323,7 +314,7 @@
     each(x, ...args) {
       let i = args.length;
 
-      if (this.flag & END && !this.isRoot()) return this;
+      if (this.flag & 4 && !this.isRoot()) return this;
       this.flag = 0;
       args.push(null, null);
       if (isObject(x)) {
@@ -334,7 +325,7 @@
           args[i + 1] = v[0];
           args[i + 3] = k + 1;
           this.render(...args);
-          return this.flag & END && true;
+          return this.flag & 4 && true;
         });
       } else if (typeof x === 'object') {
         if (!Array.isArray(x)) x = Array.from(x);
@@ -344,7 +335,7 @@
           args[i + 1] = k;
           args[i + 3] = k + 1;
           this.render(...args);
-          return this.flag & END && true;
+          return this.flag & 4 && true;
         });
       }
       return this;
@@ -358,43 +349,44 @@
       return isConnected(this.node);
     }
 
-    appendTo(parentNode) {
-      assert(parentNode);
-      if (!this.isRoot())
-        parentNode.appendChild(this.node);
-      else
-        this.node.childNodes.forEach((item) => {
-          parentNode.appendChild(item);
-        });
+    appendTo(parent) {
+      let doc = parent.ownerDocument;
+      if (this.isRoot()) while (this.node.firstChild)
+        parent.appendChild(doc.adoptNode(this.node.firstChild));
+      else if (this.node)
+        parent.appendChild(doc.adoptNode(this.node));
+    }
+
+    removeChilds() {
+      let parent = this.node;
+      while (parent && parent.lastChild)
+        parent.removeChild(parent.lastChild);
     }
 
     renew(node) {
-      assert(node);
-      let parent = node.parentNode;
-      if (!this.isRoot())
-        parent.replaceChild(this.node, node);
-      else {
+      let doc = node.ownerDocument,
+        parent = node.parentNode;
+      if (this.isRoot()) {
         let last = this.node.lastChild;
-        parent.replaceChild(last, node);
-        this.node.childNodes.forEach((item) => {
-          parent.insertBefore(item, last);
-        });
-      }
+        if (last) {
+          parent.replaceChild(doc.adoptNode(last), node);
+          while (this.node.firstChild)
+            parent.insertBefore(doc.adoptNode(this.node.firstChild), last);
+        }
+      } else if (this.node)
+        parent.replaceChild(doc.adoptNode(this.node), node);
     }
 
     insertBefore(node) {
-      assert(node);
-      let parent = node.parentNode;
-      if (!this.isRoot())
-        parent.insertBefore(this.node, node);
-      else
-        this.node.childNodes.forEach((item) => {
-          parent.insertBefore(item, node);
-        });
+      let doc = node.ownerDocument,
+        parent = node.parentNode;
+      if (this.isRoot()) while (this.node.firstChild)
+        parent.insertBefore(doc.adoptNode(this.node.firstChild), node);
+      else if (this.node)
+        parent.insertBefore(doc.adoptNode(this.node), node);
     }
 
     insertAfter(node) {
-      assert(node);
       if (node.nextSibling)
         this.insertBefore(node.nextSibling);
       else
@@ -407,9 +399,9 @@
     }
 
     toScript() {
-      return this.view.reduce((sum, view)=> {
-        return toScript(sum, view, 0);
-      }, '[') + ']';
+      return this.view.reduce(
+        (sum, view, i) => toScript(sum, view, i),'['
+      ) + ']';
     }
 
     attr(key, val) {
@@ -417,7 +409,7 @@
        return this.node.hasAttribute(key) ?
         this.node.getAttribute(key) :
         this.node[key];
-      if (this.flag & END) return this;
+      if (this.flag & 4) return this;
 
       let fn = this.$[key];
       if (typeof fn !== 'function')
@@ -472,15 +464,15 @@
     }
 
     end() {
-      this.flag |= END;
+      this.flag |= 4;
       return this;
     }
     break() {
-      this.flag |= BREAK;
+      this.flag |= 1;
       return this;
     }
     skip() {
-      this.flag |= SKIP;
+      this.flag |= 2;
       return this;
     }
 
@@ -526,7 +518,7 @@
     if (node.nodeType !== ELEMENT_NODE)
       return null;
 
-    view[TAG] = node.nodeName;
+    view[0] = node.nodeName;
     let attrs = node.attributes;
     for (let i = 0; i < attrs.length; i++) {
       let
@@ -541,14 +533,14 @@
           body += !end ? 'this.attr("' + name + '",' +
             parseTemplate(val) + ');' : '';
         else {
-          view[ATTRS] = view[ATTRS] || Object.create(null);
-          view[ATTRS][name] = val;
+          view[1] = view[1] || Object.create(null);
+          view[1][name] = val;
         }
         continue;
       }
 
       if ('func' === name) {
-        view[FUNC] = di(val);
+        view[4] = di(val);
         continue;
       }
 
@@ -560,7 +552,7 @@
       if (val.indexOf('{{') !== -1) val = parseTemplate(val);
 
       if ('if' === name) {
-        view[TAG] = di(val, view[TAG], param);
+        view[0] = di(val, view[0], param);
         continue;
       }
 
@@ -584,14 +576,14 @@
 
     if (body) {
       if (!render) body += directives.render(param);
-      if (!view[ATTRS]) view[ATTRS] = 0;
-      view[FN] = new Function(param, body);  // jshint ignore:line
+      if (!view[1]) view[1] = 0;
+      view[2] = new Function(param, body);  // jshint ignore:line
     }
 
     let childs = [];
     if ('SCRIPT' === node.nodeName || 'STYLE' === node.nodeName) {
       next = node.textContent;
-      if (next) childs.push(['^' + next]);
+      if (next) childs.push(['=' + next]);
     }else {
       next = next || param;
       node.childNodes.forEach((child) => {
@@ -600,10 +592,10 @@
       });
     }
 
-    if (childs.length || view[FUNC]) {
-      if (!view[ATTRS]) view[ATTRS] = 0;
-      if (!view[FN]) view[FN] = 0;
-      view[CHILDS] = childs.length && childs || 0;
+    if (childs.length || view[4]) {
+      if (!view[1]) view[1] = 0;
+      if (!view[2]) view[2] = 0;
+      view[3] = childs.length && childs || 0;
     }
     return view;
   }

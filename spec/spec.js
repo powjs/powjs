@@ -203,11 +203,12 @@ let cases = [
     html: '<p><b>a</b></p>'
   }, {
     src: `
-      <nav>
+      <nav func="breadcrumb" param="paths">
         <div class="nav-wrapper">
-          <div class="col s12" each="v">
-            <!-- 下面的 v 是推导形参, 是上面 v 的遍历元素 -->
-            <a href="#!" class="breadcrumb">{{v}}</a>
+          <div class="col s12" each="paths, val-path">
+            <a href="#!" class="breadcrumb">
+            {{path}}
+            </a>
           </div>
         </div>
       </nav>`,
@@ -221,9 +222,9 @@ let cases = [
     args: [2],
     html: 'yes'
   }, {
-    src: '<ul render=":k,v"><li>{{k}}{{v}}</li></ul>',
+    src: '<ul render=":k,v"><li>{{k}}\n{{v}}</li></ul>',
     args: [1, 2],
-    html: '<ul><li>21</li></ul>'
+    html: '<ul><li>2\n1</li></ul>'
   }, {
     src: '<ul render="k"><li>{{v}}</li></ul>',
     args: [1, 2],
@@ -253,9 +254,9 @@ let cases = [
     args: ['red'],
     html: '<style>body{background: {{v}};}</style>'
   }, {
-    src: '<head></head>',
+    src: '<head><style></style></head>',
     args: [],
-    html: ''
+    html: '<style></style>'
   }, {
     src: '<body>x</body>',
     args: [],
@@ -281,6 +282,10 @@ let cases = [
     src: document.querySelector('head').childNodes,
     args: [],
     html: document.querySelector('head').innerHTML.trim().replace(/(\n *)/mg, '')
+  }, {
+    src:`<div param="array" if="':';" each="array,val-name"><b>{{name}}</b></div>`,
+    args: [[1,2,3]],
+    html: '<b>1</b><b>2</b><b>3</b>'
   }
 ];
 
@@ -288,15 +293,30 @@ describe('render', function() {
   cases.some((cas,i) => {
     it(`${i}:${cas.src}`, function() {
       let
+        html,
         pow = PowJS(cas.src, cas.opts),
-        args = cas.args || [];
+        args = cas.args || [],
+        src = pow.toScript(),
+        fn = Function('','return '+src); // jshint ignore: line
+
       if (cas.echo)
-        format(pow.toScript());
+        format(src);
       if (cas.each)
         pow.each(args);
       else
         pow.render(...args);
-      let html = pow.html();
+      html = pow.html();
+      if (cas.html)
+        expect(html).toBe(cas.html);
+      else
+        expect(html).not.toContain('never');
+
+      pow = PowJS(fn(), cas.opts);
+      if (cas.each)
+        pow.each(args);
+      else
+        pow.render(...args);
+      html = pow.html();
       if (cas.html)
         expect(html).toBe(cas.html);
       else
@@ -320,8 +340,8 @@ describe('DOM Manipulation', function() {
 
   it('Expect TypeError', function() {
     let pow = sandbox();
-    expect(()=> pow.render().renew()).toThrowError(/Manipulation/);
-    expect(()=> pow.render().renew(real('.sandbox'))).toThrowError(/Manipulation/);
+    expect(()=> pow.render().renew()).toThrowError();
+    expect(()=> pow.render().renew(real('.sandbox'))).toThrowError();
   });
 });
 
@@ -457,9 +477,10 @@ describe('Case-Folders', function() {
 
 describe('exports', function() {
   it('exports', function() {
-    let pow = PowJS('text');
-    expect(pow.toScript()).toBe('[[\'#text\']]');
-    expect(pow.exports()).toBe('module.exports = [[\'#text\']];');
-    expect(pow.exports('a')).toBe('a = [[\'#text\']];');
+    let pow = PowJS('text'),
+      want = "[['#text']]";
+    expect(pow.toScript()).toBe(want);
+    expect(pow.exports()).toBe(`module.exports = ${want};`);
+    expect(pow.exports('a')).toBe(`a = ${want};`);
   });
 });

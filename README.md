@@ -93,6 +93,7 @@ module.exports = [
     [
         /*...view of childNodes*/
     ]
+    /* There may be a name */
   ]
   /* more view ...*/
 ];
@@ -112,14 +113,13 @@ module.exports = [
 </nav>
 ```
 
-PowJS 模板写法:
+PowJS 高可读性模板写法:
 
 ```html
-<nav>
+<nav func="breadcrumb" param="paths">
   <div class="nav-wrapper">
-    <div class="col s12" each="v">
-      <!-- 下面的 v 是推导形参, 是上面 v 的遍历元素 -->
-      <a href="#!" class="breadcrumb">{{v}}</a>
+    <div class="col s12" each="paths, val-path">
+      <a href="#!" class="breadcrumb">{{path}}</a>
     </div>
   </div>
 </nav>
@@ -137,34 +137,24 @@ instance.toScript();
 生成:
 
 ```js
-[          // 支持多个节点, 所以是个视图数组
+[
   [
-    "NAV", // 标签
-    0,     // 该节点没有静态属性
-    0,     // 该节点没有指令和插值属性
-    [      // 子节点
+    "NAV", 0, 0,
+    [
       [
-        "DIV",
-        { class: "nav-wrapper" },
-        0,
+        "DIV",{ class: "nav-wrapper" }, 0,
         [
           [
-            "DIV",
-            { class: "col s12" },
-            function(v, k) {       // 指令生成的视图函数
-              this.each(v);
+            "DIV", { class: "col s12" }, function(paths) {
+              this.each(paths);
             },
             [
               [
-                "A",
-                { href: "#!", class: "breadcrumb" },
-                0,
+                "A", { href: "#!", class: "breadcrumb" }, 0,
                 [
                   [
-                    "#",
-                    0,
-                    function(v, k) {
-                      this.text(`${v}`);
+                    "#", 0, function(path, k, $l, $n) {
+                      this.text(`${path}`);
                     }
                   ]
                 ]
@@ -173,9 +163,42 @@ instance.toScript();
           ]
         ]
       ]
-    ]
+    ],
+    "breadcrumb"
   ]
 ]
+```
+
+可用伪代码表示为:
+
+```js
+function breadcrumb(paths) {
+  create('nav');
+  createChild(function() {
+    create('div', {class: 'nav-wrapper'});
+    createChild(function(){
+      create('div', {class: 'col s12'});
+      eachCreateChild(paths, function(path) {
+        create('a', {href: '#!', class: 'breadcrumb'});
+        createChild(function(path) {
+          text(path);
+        });
+      });
+    });
+  });
+}
+```
+
+还有更简约的写法, 没有函数名(视图名), 使用缺省形参名 `v`:
+
+```html
+<nav>
+  <div class="nav-wrapper">
+    <div class="col s12" each="v">
+      <a href="#!" class="breadcrumb">{{v}}</a>
+    </div>
+  </div>
+</nav>
 ```
 
 ## 指令
@@ -463,9 +486,13 @@ directives.if = function(exp, tag) {
 
 - 非字符串   放弃创建节点
 - 空字符串   放弃创建节点
-- `#` 开头   创建 `Text` 节点, 且 '#' 之后的字符串作为节点的内容
+- `#` 开头   `Text` 节点, `#` 之后的字符串作为节点的内容
 - `@` 开头   调用命名视图, 且传递继承的实参
-- 其它字符串 创建 `Element` 节点
+- `=` 开头   `=` 之后的字符串向 `this.parent.textContent` 赋值, 典型用例 `style`
+- `!` 开头   注释节点, `!` 之后的字符串作为节点的内容
+- `:` 开头   伪节点, 执行操作 `this.node = this.parent`, 并继续执行后续指令(代码)
+- 字母开头   创建 `Element` 节点
+- 其它       不创建节点并继续执行后续指令(代码), 注意此时 `this.node === null`
 
 ### skip-break
 
@@ -542,6 +569,7 @@ directives.if = function(exp, tag) {
     appendTo(node)    节点操作, 追加渲染的节点到 node 末尾
     insertBefore(node)节点操作, 插入渲染的节点到 node 之前
     insertAfter(node) 节点操作, 插入渲染的节点到 node 之后
+    removeChilds()    节点操作, 删除 this.node 下全部的子节点
 
 ### each
 
@@ -624,6 +652,52 @@ pow(`<img src="1.jpg" do="this.attr('src','2.jpg')">`, {
     }
 }).render().html();
 // output: <img data-src="2.jpg">
+```
+
+## 伪节点
+
+伪节点不生成 DOM 节点, 起到代码块的效果.
+
+鉴于目前自定义节点尚未在主流浏览器普及, 可以通过 `if="':';"` 产生伪节点:
+
+```html
+<div param="array" if="':';" each="array,val-name">
+<b>{{name}}</b>
+</div>
+<!-- render([1,2,3]) output -->
+<b>1</b><b>2</b><b>3</b>
+```
+
+视图:
+
+```js
+[
+  [
+    function(array) {
+      return ":";
+    },
+    0,
+    function(array) {
+      this.each(array);
+    },
+    [
+      [
+        "B",
+        0,
+        0,
+        [
+          [
+            "#",
+            0,
+            function(name, k, $l, $n) {
+              this.text(`${name}`);
+            }
+          ]
+        ]
+      ]
+    ]
+  ]
+]
 ```
 
 ## xPowJS
