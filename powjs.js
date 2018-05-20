@@ -16,8 +16,8 @@
     slice = Array.prototype.slice,
     toString = Object.prototype.toString,
     RENDERINFERENCE = /(([a-z]\w*),|([a-z]\w*)$)/ig,
-    EACHINFERENCE = /(key-|val-|len-|num-)?(([a-z]\w*),|([a-z]\w*)$)/ig,
-    TMPL = /{{|}}/m;
+    EACHINFERENCE = /(key-|val-|len-|num-)?[a-z]\w*(,|$)/ig,
+    TMPL = /({{|}})/m;
 
   let counter = 0, directives = {
 
@@ -264,7 +264,7 @@
           return this;
         } else if (c === 0x3A) // :
           this.node = this.parent;
-      } else if (c<=0x5A || c>=0x61 && c<=0x7A) { // Z, a-z
+      } else if (c <= 0x5A || c >= 0x61 && c <= 0x7A) { // Z, a-z
         this.node = this.parent.appendChild(
           document.createElement(tag)
         );
@@ -400,7 +400,7 @@
 
     toScript() {
       return this.view.reduce(
-        (sum, view, i) => toScript(sum, view, i),'['
+        (sum, view, i) => toScript(sum, view, i), '['
       ) + ']';
     }
 
@@ -490,6 +490,13 @@
     }
   }
 
+  function isPaired(s) {
+    let
+      b = s.indexOf('{{'),
+      e = b < 0 && b || s.indexOf('}}');
+    return e > 0 && e > b;
+  }
+
   function compile(node, prefix, param) {
 
     let body = '', render = '', next = '', view = [], end = '';
@@ -498,15 +505,15 @@
       body = node.textContent.trim();
       if (!body) return null;
 
-      if (body.indexOf('{{') === -1)
-        view.push('#' + body);
-      else if (body.startsWith('{{@') && body.endsWith('}}'))
+      if (body.startsWith('{{@') && body.endsWith('}}'))
         view.push(body.slice(2, -2));
-      else
+      else if (isPaired(body))
         view.push('#', 0, new Function(  // jshint ignore:line
           param,
           directives.text(parseTemplate(body))
         ));
+      else
+        view.push('#' + body);
       return view;
     }
 
@@ -539,6 +546,9 @@
         continue;
       }
 
+      if (isPaired(val))
+        throw new SyntaxError('Invalid interpolation');
+
       if ('func' === name) {
         view[4] = di(val);
         continue;
@@ -548,8 +558,6 @@
         param = di(val);
         continue;
       }
-
-      if (val.indexOf('{{') !== -1) val = parseTemplate(val);
 
       if ('if' === name) {
         view[0] = di(val, view[0], param);
@@ -617,30 +625,27 @@
       next = ['','v','k','$l','$n'],
       force = parameter[0] === ':',
       clean = force ? parameter.substring(1) : parameter,
-      params = parameter.match(EACHINFERENCE);
+      params = clean.match(EACHINFERENCE);
 
     if (!params) {
       if (!force && clean) return [clean, '']; // complex
       throw new Error('Illegal expression on each');
     }
 
-    params = params.reduce((sum, s,i)=> {
-      if (!i) return '';
+    params = params.reduce((sum, s)=> {
       let c = s.endsWith(',') ? s.slice(0, -1) : s;
-      if (s.startsWith('key-') || s.startsWith('val-')) {
+      if (c[3] === '-' && s.match(/^(key|val|len|num)/)) {
         clean = clean.replace(s, '');
+        s = s[0];
         next[0] = ',';
-        next[s[0] === 'k' && 2 || 1] = c.slice(4);
+        next[
+          s === 'v' && 1 || s === 'k' && 2 || s === 'l' && 3 || 4
+        ] = c.substring(4);
         return sum;
       }
-      if (s.startsWith('len-') || s.startsWith('num-')) {
-        clean = clean.replace(s, '');
-        next[0] = ',';
-        next[s[0] === 'l' && 3 || 4] = c.slice(4);
-        return sum;
-      }
+      if (sum === ',') return '';
       return !sum && c || sum + ',' + c;
-    }, '');
+    }, ',');
 
     if (!clean)
       throw new Error('Illegal expression on each');
@@ -655,20 +660,23 @@
   }
 
   function parseTemplate(txt) {
-    let a = txt.split(TMPL);
-    if (a.length & 1 == 0)
-      throw new SyntaxError('The symbols "{{}}" unpaired: ' + txt);
-    txt = '';
-    for (let i = 0; i < a.length; i++) {
-      let s = a[i];
-      if (!s) continue;
-      if (i & 1)
-        txt += '${' + s + '}';
-      else
-        txt += s.split(/(^`|[^\\]`)/).join('\\');
+    let
+      i = 0,
+      a = txt.split(TMPL),
+      t = a.shift();
+    if (a.length & 3) a[0] = '';
+    while (i < a.length) {
+      let b = a[i++], exp = a[i++].trim(), e = a[i++];
+
+      if (b !== '{{' || e !== '}}' || !exp)
+        throw new SyntaxError(
+          'The symbols "{{}}" unpaired: ' + txt
+        );
+
+      t += '${' + exp + '}' + a[i++];
     }
 
-    return '`' + txt + '`';
+    return '`' + t + '`';
   }
 
   if (global)

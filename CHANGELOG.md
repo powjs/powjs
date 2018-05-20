@@ -2,6 +2,12 @@
 
 该项目遵循 [Semantic Versioning](http://semver.org/).
 
+## 2.3.0
+
+- 修复 `each` 漏判的错误情况 `each="val-val"`
+- 优化 插值判断, 支持形如 `}}{{` 或 `{{` 或 `}}`
+- 变更 为避免二义性, 禁止指令使用插值
+
 ## 2.2.3
 
 - 修复 `exports` 导出 BUG

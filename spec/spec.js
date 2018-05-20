@@ -31,11 +31,11 @@ function sandbox() {
 
 let cases = [
   {
-    src: '<b text="User: {{v}}"></b>',
+    src: '<b text="`User: ${v}`"></b>',
     args: ['<i>Tom</i>'],
     html: '<b>User: &lt;i&gt;Tom&lt;/i&gt;</b>',
   }, {
-    src: '<b html="User: {{v}}"></b>',
+    src: '<b html="`User: ${v}`"></b>',
     args: ['<i>Tom</i>'],
     html: '<b>User: <i>Tom</i></b>',
   }, {
@@ -286,6 +286,34 @@ let cases = [
     src:`<div param="array" if="':';" each="array,val-name"><b>{{name}}</b></div>`,
     args: [[1,2,3]],
     html: '<b>1</b><b>2</b><b>3</b>'
+  }, {
+    src: '{{',
+    args: [],
+    html: '{{'
+  }, {
+    src: '}}',
+    args: [],
+    html: '}}'
+  }, {
+    src: '}}{{',
+    args: [],
+    html: '}}{{'
+  }, {
+    src: '<b>}}</b>',
+    args: [],
+    html: '<b>}}</b>'
+  }, {
+    src: '<b>{{</b>',
+    args: [],
+    html: '<b>{{</b>'
+  }, {
+    src: '<b text="`{{`"></b>',
+    args: [],
+    html: '<b>{{</b>'
+  }, {
+    src: '<b text="`}}`"></b>',
+    args: [],
+    html: '<b>}}</b>'
   }
 ];
 
@@ -397,26 +425,37 @@ describe('call', function() {
   });
 });
 
-describe('Logic conflict', function() {
-  let cases = [
-    '<b skip text=""></b>',
-    '<b skip html=""></b>',
-    '<b skip render="dd"></b>',
-    '<b skip each="dd"></b>',
-    '<b end text=""></b>',
-    '<b end html=""></b>',
-    '<b end render="dd"></b>',
-    '<b end each="dd"></b>',
-    '<b text="" skip ></b>',
-    '<b html="" skip ></b>',
-    '<b render="dd" skip ></b>',
-    '<b each="dd" skip ></b>',
+describe('Expect some error', function() {
+  let message, cases = [
+    ['<b skip text=""></b>', /Logic conflict/],
+    ['<b skip html=""></b>'],
+    ['<b skip render="dd"></b>'],
+    ['<b skip each="dd"></b>'],
+    ['<b end text=""></b>'],
+    ['<b end html=""></b>'],
+    ['<b end render="dd"></b>'],
+    ['<b end each="dd"></b>'],
+    ['<b text="" skip ></b>'],
+    ['<b html="" skip ></b>'],
+    ['<b render="dd" skip ></b>'],
+    ['<b each="dd" skip ></b>'],
+
+    ['<b text="{{v}}"></b>', /interpolation/],
+
+    ['<b>{{v}}{{</b>', /unpaired/],
+    ['<b>{{}}</b>'],
+
+    ['<b render=":"></b>', /render/],
+    ['<b each=""></b>', /each/],
+    ['<b each=":"></b>', /each/],
+    ['<b each="key-k"></b>', /each/],
   ];
 
-  it('Expect conflict', function() {
-    cases.forEach((source) =>
-      expect(()=> PowJS(source)).toThrowError(/Logic conflict/)
-    );
+  it('expect ...', function() {
+    cases.forEach((a) =>{
+      message = a[1] || message;
+      expect(()=> PowJS(a[0])).toThrowError(message);
+    });
   });
 
 });

@@ -10,8 +10,8 @@ PowJS 是一个 ECMAScript 6 编译型 Real-DOM 模板引擎.
     Real-DOM 直接在 DOM Tree 上编译, 渲染. DOM Tree 就是模板
     原生语法 指令与 ECMAScript 原生语法对应
     导出视图 采用 ECMAScript 源码
-    属性插值 name="somethin {{expr}}"
-    文本插值 剔除文本节点两端空白后对 {{expr}} 进行插值
+    属性插值 非指令属性可使用插值 name="somethin {{expr}}"
+    文本插值 文本节点可使用插值 {{expr}}, 总是剔除文本节点两端的空白
     缺省形参 顶层缺省形参为 (v, k)
     形参传递 除非使用 param 指令, 子层继承上层的形参
 
@@ -264,11 +264,11 @@ PowJS 在编译期会检查有明显冲突的指令顺序, 养成良好的指令
 
 ### 插值
 
+插值可用于文本节点或者非指令属性, 指令只能使用 ECMAScript, 不能使用插值.
+
 插值被转换为 ECMAScript 模板字符串, PowJS 只是替换 `{{`, `}}` 为 `${`,`}`.
 
     abc {{exp}} def  ===> `abc ${exp} def`
-
-因此有些指令不能使用插值, 比如 `func`, `param`, `render`, `each`.
 
 ### func
 
@@ -530,7 +530,7 @@ directives.if = function(exp, tag) {
 ]
 ```
 
-如果使用了指令或插值, 但指令都和渲染无关, PowJS 就会补全 `this.render`.
+如果使用的指令都和渲染无关, PowJS 就会补全 `this.render`.
 
 同理, 善用 `skip` 指令可以避免补全的 `this.render` 被执行.
 
