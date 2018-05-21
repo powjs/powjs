@@ -65,7 +65,7 @@ module.exports = function (source, option) {
    *
    *   option:
    *      string        可选编译时指令前缀, 缺省为 ''
-   *      Object        可选渲染插件, 键值是属性名, 值是函数
+   *      Object        可选渲染期 addon
    *      其它          忽略
    *
    * 返回
@@ -538,7 +538,7 @@ directives.if = function(exp, tag) {
 
 属性:
 
-    $       插件, 如果需要可以随时设置
+    x       addon, 如果需要可以随时设置
     node    只读, 当前渲染生成的节点
     parent  只读, 当前节点的父节点, 最顶层是 DocumentFragment BODY 临时节点
 
@@ -623,9 +623,13 @@ document.createElement('template').content;
     这使得 this.parent 和 this.node 可以分离, 产生更多变化的可能.
     比如设置 this.parent 或者 this.node 指向页面上的节点, 进行实时渲染.
 
-## plugins
+## addon
 
-插件是一个函数, 在渲染时执行. 定义:
+PowJS 实例的 `x` 属性就是用户传入的 `addon` 对象, 它融合了插件和用户上下文.
+当节点的属性名和 `addon` 下的属性名匹配且是个函数时, 该函数就是插件,
+在渲染时匹配到属性名时被执行. 显然如果未判定为插件, 那就由用户控制(上下文).
+
+插件函数原型:
 
 ```js
 /**
@@ -645,11 +649,9 @@ function plugin(pow, val, key) {
 let pow = require('powjs');
 
 pow(`<img src="1.jpg" do="this.attr('src','2.jpg')">`, {
-    plugins:{
-        'src': function(pow, val) {
-            pow.attr('data-src', val);
-        }
-    }
+  src: function(pow, val) {
+      pow.attr('data-src', val);
+  }
 }).render().html();
 // output: <img data-src="2.jpg">
 ```
@@ -704,6 +706,7 @@ pow(`<img src="1.jpg" do="this.attr('src','2.jpg')">`, {
 
 可以使用 `require('powjs')()` 获得 PowJS.prototype 进行扩展.
 为防止与未来版本冲突, PowJS 保留以 `$` 开头的属性或方法, 保证不使用 `x` 开头的.
+事实上 `x` 属性已经分配给用户插件.
 
 ## 赞助
 

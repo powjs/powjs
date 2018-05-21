@@ -188,12 +188,12 @@
   }
 
   class PowJS {
-    constructor(parent, view, plugin, root) {
+    constructor(parent, view, addon, root) {
       this.parent = parent;
       this.view = view;
       this.node = null;
       this.flag = 0;
-      this.$ = plugin;
+      this.x = addon;
       this.root = root;
     }
 
@@ -290,7 +290,7 @@
       if (childs[4] !== name && !childs[name]) childs[name] = view;
 
       return new PowJS(
-        this.node || this.parent, view, this.$, this.root || this.view
+        this.node || this.parent, view, this.x, this.root || this.view
       ).create(view, ...args);
     }
 
@@ -302,7 +302,7 @@
       if (!view || this.flag & 4 && !root) return this;
 
       if (!(this.flag & 2)) view.some((view) => {
-        let flag = new PowJS(this.node, view, this.$, this.root || this.view)
+        let flag = new PowJS(this.node, view, this.x, this.root || this.view)
           .create(view, ...args).flag;
         if (flag & 4) this.flag |= flag;
         return flag & 5 && true;
@@ -411,13 +411,13 @@
         this.node[key];
       if (this.flag & 4) return this;
 
-      let fn = this.$[key];
+      let fn = this.x[key];
       if (typeof fn !== 'function')
         this.node.setAttribute(key, val);
       else {
-        this.$[key] = null;
+        this.x[key] = null;
         fn(this, val, key);
-        this.$[key] = fn;
+        this.x[key] = fn;
       }
       return this;
     }
@@ -436,13 +436,13 @@
         toString.call(val) !== toString.call(real))
         return this.attr(property, val);
 
-      let fn = this.$[property];
+      let fn = this.x[property];
       if (typeof fn !== 'function')
         node[property] = val;
       else {
-        this.$[property] = null;
+        this.x[property] = null;
         fn(this, val, property);
-        this.$[property] = fn;
+        this.x[property] = fn;
       }
       return this;
     }

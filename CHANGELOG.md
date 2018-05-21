@@ -2,6 +2,10 @@
 
 该项目遵循 [Semantic Versioning](http://semver.org/).
 
+## 2.3.1
+
+- 变更 内部插件属性 `$` 变更为 `x`, 这意味着开放给用户使用
+
 ## 2.3.0
 
 - 修复 `each` 漏判的错误情况 `each="val-val"`
