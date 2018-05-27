@@ -340,7 +340,7 @@ describe('render', function() {
       else
         expect(html).not.toContain('never');
 
-      pow = PowJS(fn(), cas.opts);
+      pow = PowJS(fn()).addon(cas.opts);
       if (cas.each)
         pow.each(args);
       else

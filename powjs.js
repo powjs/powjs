@@ -120,7 +120,7 @@
       pow = new PowJS(
         document.createElement('template').content,
         view,
-        isObject(option) && option || {},
+        option,
         null
       );
     pow.node = pow.parent;
@@ -139,7 +139,7 @@
   }
 
   function funcScript(fn) {
-    return fn.toString()
+    return !fn && '0' || fn.toString()
       .replace(/^function( (anonymous)?)?\(/, 'function \(')
       .replace('\n/*``*/', '');
   }
@@ -149,10 +149,10 @@
 
     return sum + (i && ',[' || '[') +
       (typeof view[0] === 'string' && `'${view[0]}'` || funcScript(view[0])) +
-      (len > 1 && ',' + JSON.stringify(view[1]) || '') +
+      (len > 1 && ',' + JSON.stringify(view[1] || 0) || '') +
       (len > 2 && ',' + funcScript(view[2]) || '') +
-      (len > 3 && view[3].reduce(toScript, ',[') + ']' || '') +
-      (len > 4 && ',' + JSON.stringify(view[4]) || '') +
+      (len > 3 && (view[3] || []).reduce(toScript, ',[') + ']' || '') +
+      (len > 4 && ',' + JSON.stringify(view[4] || 0) || '') +
     ']';
   }
 
@@ -193,8 +193,13 @@
       this.view = view;
       this.node = null;
       this.flag = 0;
-      this.x = addon;
+      this.x = isObject(addon) && addon || {};
       this.root = root;
+    }
+
+    addon(addon) {
+      this.x = isObject(addon) && addon || {};
+      return this;
     }
 
     text(text) {

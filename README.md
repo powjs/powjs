@@ -552,6 +552,7 @@ directives.if = function(exp, tag) {
     text(expr)        指令专用
     html(expr)        指令专用
     call(name,...)    视图调用
+    addon(object)     辅助方法, 设置插件或上下文, 返回 this
     isRoot()          辅助方法, 返回 this 是否是顶层视图的 PowJS 实例
     isReal()          辅助方法, 返回 当前节点是否连接到真实的页面 DOM 中
     attr(attrName[,v])辅助方法, 设置或返回当前节点属性值
