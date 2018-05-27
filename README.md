@@ -708,6 +708,13 @@ pow(`<img src="1.jpg" do="this.attr('src','2.jpg')">`, {
 为防止与未来版本冲突, PowJS 保留以 `$` 开头的属性或方法, 保证不使用 `x` 开头的.
 事实上 `x` 属性已经分配给用户插件.
 
+## shadowRoot
+
+PowJS 不处理 shadowRoot. 如果在构造方法中使用 PowJS 构建子节点, 那也是独立的.
+
+所以 `powjs(shadownode).html()` 不会包括 `shadownode.shadowRoot.innerHTML` 的内容,
+这和 Shadow DOM 的原始语义完全一致.
+
 ## 赞助
 
 赞助以帮助 PowJS 持续更新

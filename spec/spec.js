@@ -2,14 +2,15 @@
 
 if (typeof PowJS === 'undefined') {
   // For Jasmine without Karma
-  let
-    JSDOM = require('jsdom').JSDOM,
-    win = new JSDOM('<!doctype html><html><head><style>b{}/*{{}}*/</style></head><body></body></html>').window;
-  document = win.document;
-  Node = win.Node;
-  NodeList = win.NodeList;
-  PowJS = require('../powjs.js');
+  let JSDOM = require('jsdom').JSDOM;
+  window = new JSDOM('<!doctype html><html><head><style>b{}/*{{}}*/</style></head><body></body></html>').window;
+  window.Object = Object;
+  window.Math = Math;
+  document = window.document;
+  Node = window.Node;
+  NodeList = window.NodeList;
   prettier = require('prettier');
+  PowJS = require('../powjs.js');
 }
 
 function format(code, ret) {
@@ -523,3 +524,37 @@ describe('exports', function() {
     expect(pow.exports('a')).toBe(`a = ${want};`);
   });
 });
+
+describe('Shadow DOM', function(){
+  if (!window.customElements) return;
+  const html = `
+    <h1>Test h1</h1>
+    <div>
+      <p>Test p</p>
+    </div>
+    <slot></slot>
+  `;
+  class CEWithChildren extends HTMLElement {
+    constructor(self) {
+      super();
+      this.attachShadow({mode: 'open'});
+      this.shadowRoot.innerHTML = html;
+    }
+  }
+
+  customElements.define('ce-with-children', CEWithChildren);
+
+  const elm = document.createElement('ce-with-children');
+  it('should to be orgin html', () => {
+    let
+      pow = PowJS(elm),
+      len = pow.render().childNodes().length,
+      child = pow.firstChild();
+    console.log(pow.toScript());
+    expect(len).toBe(1);
+    expect(child.shadowRoot).not.toBeNull();
+    expect(child.shadowRoot.innerHTML).toBe(html);
+    expect(pow.html()).toBe('<ce-with-children></ce-with-children>');
+  });
+});
+
